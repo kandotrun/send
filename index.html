@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="description" content="ファイルや文章を、この端末で暗号化して送る。登録不要。ファイル10 GB、文章100 MBまで。" />
+    <meta name="theme-color" content="#f5f2ea" />
+    <title>send. — ひとつ、送る。</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script type="module" src="/src/web/main.ts"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="wordmark" href="/" aria-label="send. トップへ">
+          <svg class="brand-envelope" viewBox="0 0 32 24" fill="none" aria-hidden="true">
+            <path d="M1 1h30v22H1zM1 1l15 12L31 1" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+          <span>send<span class="brand-dot">.</span></span>
+        </a>
+        <span class="header-note">登録なし。<span>ファイル10 GBまで。</span></span>
+      </header>
+
+      <main id="main-content">
+        <div class="introduction">
+          <p class="eyebrow" id="screen-eyebrow">A SMALL DELIVERY</p>
+          <h1 id="screen-title">ひとつ、送る。</h1>
+          <p id="screen-description">ファイルも、ことばも。期限つきのリンクで届けます。</p>
+        </div>
+
+        <section class="paper" aria-label="送受信の操作">
+          <div class="paper-heading" aria-hidden="true">
+            <span class="folio">send. / 01</span>
+            <span class="paper-rule"></span>
+            <span class="postmark">LINK DELIVERY</span>
+          </div>
+
+          <div id="service-notice" class="notice" role="status" hidden></div>
+
+          <section id="sender-view" aria-label="送るものを準備">
+            <form id="send-form" novalidate>
+              <fieldset id="send-fieldset">
+                <legend class="sr-only">送信する内容と期限</legend>
+                <div class="tabs" role="tablist" aria-label="送るもの">
+                  <button id="file-tab" class="tab" type="button" role="tab" aria-selected="true" aria-controls="file-panel" tabindex="0">ファイル</button>
+                  <button id="text-tab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="text-panel" tabindex="-1">文章</button>
+                </div>
+
+                <div id="file-panel" class="input-panel" role="tabpanel" aria-labelledby="file-tab">
+                  <div id="dropzone" class="dropzone" data-testid="dropzone">
+                    <svg class="upload-envelope" viewBox="0 0 64 48" fill="none" aria-hidden="true">
+                      <path d="M4 12h56v32H4zM4 12l28 19 28-19" stroke="currentColor" stroke-width="1.3" />
+                      <path d="M32 2v17m-6-11 6-6 6 6" stroke="currentColor" stroke-width="1.3" />
+                    </svg>
+                    <p class="drop-title">ここにファイルを置く</p>
+                    <p class="drop-subtitle">または <button id="file-pick" class="text-button" type="button">ファイルを選ぶ</button></p>
+                    <p class="fine-print">1ファイル / 10 GBまで</p>
+                    <input id="file-input" class="sr-only" type="file" aria-label="送るファイルを選ぶ" tabindex="-1" />
+                  </div>
+                  <div id="file-selection" class="file-selection" hidden>
+                    <span class="file-glyph" aria-hidden="true">↗</span>
+                    <div class="file-information">
+                      <p id="selected-name" class="selected-name"></p>
+                      <p id="selected-size" class="fine-print"></p>
+                    </div>
+                    <button id="file-clear" class="small-button" type="button" aria-label="選んだファイルを取り除く">取り除く</button>
+                  </div>
+                  <p id="sender-browser-guide" class="notice"><strong>100 MBを超えるファイルの受け取りには、PC版ChromeまたはEdgeを使ってください。</strong>送る前に、相手のブラウザーと保存先の空き容量を確認してください。</p>
+                </div>
+
+                <div id="text-panel" class="input-panel" role="tabpanel" aria-labelledby="text-tab" hidden>
+                  <label class="sr-only" for="text-input">送る文章</label>
+                  <textarea id="text-input" rows="6" placeholder="届けたいことばを、ここに。" aria-describedby="text-size" spellcheck="false"></textarea>
+                  <p id="text-size" class="fine-print text-counter">文章は100 MBまで。この端末で暗号化します。</p>
+                </div>
+
+                <div class="send-options">
+                  <div class="expiry-option">
+                    <label for="expiry">リンクの有効期限</label>
+                    <select id="expiry" aria-describedby="ttl-help">
+                      <option value="3600">1時間</option>
+                      <option value="86400" selected>24時間</option>
+                      <option value="604800">7日</option>
+                    </select>
+                  </div>
+                  <p id="ttl-help" class="fine-print">作成時から。期限を過ぎると<br />受け取れなくなります。</p>
+                </div>
+                <p id="input-error" class="input-error" role="alert" hidden></p>
+                <button id="send-button" class="primary-button" type="submit"><span>共有リンクをつくる</span><span aria-hidden="true">↗</span></button>
+                <p class="form-note">内容とファイル名は、この端末で暗号化してから送信します。</p>
+                <p class="fine-print">1 GB = 1,000,000,000 bytes。送信・受け取り中はタブを開いたままお待ちください。自動再試行・途中再開はできません。送信は共有期限、または作成から24時間の早い方までに完了する必要があります。</p>
+              </fieldset>
+            </form>
+          </section>
+
+          <section id="created-view" aria-labelledby="created-title" hidden>
+            <div class="result-heading"><span class="result-mark" aria-hidden="true">✓</span><h2 id="created-title" tabindex="-1">届ける準備ができました。</h2></div>
+            <p class="section-description">共有リンクを、受け取る相手に送ってください。</p>
+            <div class="link-field">
+              <label for="read-link">共有リンク <span class="link-instruction">相手に送る</span></label>
+              <div class="copy-row"><input id="read-link" type="text" readonly spellcheck="false" /><button id="copy-read" class="secondary-button" type="button">コピー</button></div>
+            </div>
+            <div class="link-field management-link-field">
+              <label for="manage-link">管理リンク <span class="link-instruction">自分だけで保管</span></label>
+              <div class="copy-row"><input id="manage-link" type="text" readonly spellcheck="false" /><button id="copy-manage" class="secondary-button" type="button">コピー</button></div>
+            </div>
+            <p class="capability-warning">共有リンクを知っている人は受け取れます。管理リンクは送らず、自分で保管してください。</p>
+            <p class="fine-print">管理リンクをなくすと、期限前の取り消しはできません。この画面を閉じると、リンクは再表示できません。</p>
+            <div class="expiry-receipt"><span>受け取れる期限</span><time id="created-expiry"></time></div>
+            <div class="result-actions"><button id="new-send" class="secondary-button" type="button">新しく送る</button><button id="revoke-created" class="danger-button" type="button">このリンクを取り消す</button></div>
+            <p class="fine-print">受け取った相手が保存したコピーは取り消せません。</p>
+          </section>
+
+          <section id="receiver-view" aria-labelledby="receive-title" hidden>
+            <p class="eyebrow">FOR YOU</p>
+            <h2 id="receive-title">届いています。</h2>
+            <p class="section-description">内容は、ボタンを押すまで開きません。</p>
+            <div class="received-file"><span class="file-glyph" aria-hidden="true">↓</span><div class="file-information"><h3 id="receive-name">受け取る内容</h3><p id="receive-size" class="fine-print"></p></div></div>
+            <div class="expiry-receipt"><span>受け取れる期限</span><time id="receive-expiry"></time></div>
+            <p class="safety-note">ウイルス検査は行っていません。信頼できる相手からのファイルだけ開いてください。</p>
+            <p id="receiver-browser-guide" class="notice"><strong>100 MBを超えるファイルの受け取りには、PC版ChromeまたはEdgeを使ってください。</strong>保存先を選び、少量ずつ復号して保存します。保存先の権限と空き容量（作業用領域を含む）を確認してください。タブを開いたままお待ちください。自動再試行・途中再開はできません。</p>
+            <button id="receiver-download" class="primary-button" type="button"><span id="receive-button-label">ファイルを保存する</span><span aria-hidden="true">↓</span></button>
+            <div id="received-text-panel" class="received-text-panel" hidden>
+              <h3>受け取った文章</h3>
+              <pre id="received-text" tabindex="-1"></pre>
+              <div class="result-actions"><button id="copy-text" class="secondary-button" type="button">文章をコピー</button><button id="download-text" class="secondary-button" type="button">文章を保存</button></div>
+            </div>
+            <button class="text-button back-button" type="button" data-new-send>自分も送る <span aria-hidden="true">↗</span></button>
+          </section>
+
+          <section id="management-view" aria-labelledby="management-title" hidden>
+            <p class="eyebrow">SENDER'S COPY</p>
+            <h2 id="management-title">リンクを管理する。</h2>
+            <p class="section-description">この画面では、内容の閲覧はできません。</p>
+            <dl class="management-details">
+              <div><dt>状態</dt><dd id="management-state">確認しています</dd></div>
+              <div><dt>アップロード</dt><dd id="management-chunks">—</dd></div>
+              <div><dt>有効期限</dt><dd><time id="management-expiry"></time></dd></div>
+            </dl>
+            <p class="capability-warning">この管理リンクは、ほかの人に送らないでください。</p>
+            <button id="revoke-button" class="danger-button full-width" type="button">このリンクを取り消す</button>
+            <p class="fine-print">受け取った相手が保存したコピーは取り消せません。すでに開始した配信も止められない場合があります。</p>
+            <button class="text-button back-button" type="button" data-new-send>新しく送る <span aria-hidden="true">↗</span></button>
+          </section>
+
+          <section id="invalid-view" aria-labelledby="invalid-title" hidden>
+            <p class="eyebrow">UNDELIVERED</p>
+            <h2 id="invalid-title" tabindex="-1">このリンクは開けません。</h2>
+            <p id="invalid-description" class="section-description">リンクが不完全か、有効期限が過ぎている可能性があります。送った相手に確認してください。</p>
+            <button class="secondary-button" type="button" data-new-send>トップに戻る</button>
+          </section>
+
+          <div id="status" class="operation-status" role="status" aria-live="polite" aria-atomic="true" hidden>
+            <div class="operation-copy"><span id="status-indicator" class="status-indicator" aria-hidden="true"></span><div><p id="status-title"></p><p id="status-detail" class="fine-print"></p></div><button id="cancel-button" class="small-button" type="button" hidden>キャンセル</button></div>
+            <progress id="operation-progress" max="100" aria-label="処理の進み具合" hidden></progress>
+          </div>
+        </section>
+
+        <p class="under-paper"><span aria-hidden="true">↳</span> リンクを持つ人は、ほかの人に転送できます。送る相手を確かめて。</p>
+      </main>
+
+      <footer class="site-footer">
+        <details id="security-details" class="security-details">
+          <summary>安全性と制約について <span aria-hidden="true">＋</span></summary>
+          <div class="security-content">
+            <h2>暗号化で守れること、守れないこと。</h2>
+            <p>内容とファイル名は、この端末で暗号化します。復号に必要な鍵は共有リンクの「#」以降に含まれ、サーバーには送信しません。共有リンク全体は秘密として扱ってください。</p>
+            <p>リンクを持つ人は、ほかの人に転送できます。期限切れや取り消し後は新たな受け取りを拒否しますが、受け取った相手が保存したコピーは取り消せません。すでに開始した配信の停止や、保存先からの即時の物理削除は保証しません。</p>
+            <p>サイズ・期限・IPアドレスなどの通信メタデータは、サービス運営者や配信基盤から見えます。</p>
+            <p>ウイルス検査は行っていません。信頼できる相手からのファイルだけ開いてください。</p>
+            <p>サービスから配信されるJavaScriptが改ざんされた場合や、端末や拡張機能が侵害された場合まで、暗号化だけで防ぐことはできません。<strong>第三者によるセキュリティ監査は未実施</strong>です。</p>
+            <p>初期ベータ版です。1件につきファイル1個（10 GBまで）または文章（100 MBまで）。100 MB以下はメモリ上で復号するため、端末によっては処理できません。100 MBを超えるファイルは、PC版ChromeまたはEdgeの保存先選択機能が必要です。iPhone・Safari・Firefoxなどでは大容量ファイルを受け取れません。全体をメモリに組み立てず、少量ずつ復号して保存します。</p>
+            <p>1 GB = 1,000,000,000 bytes。有効期限は作成時から始まります。送信・受け取り中はタブを開いたままにしてください。自動再試行・途中再開はできません。受け取りが失敗した場合は、はじめから受け取り直してください。</p>
+          </div>
+        </details>
+        <div class="footer-line"><span class="footer-signature">send. <span class="footer-tagline">大切なものは、必要なあいだだけ。</span></span><a href="/policy.html">利用規約・プライバシー・通報</a><a href="https://github.com/kandotrun/send" rel="noopener noreferrer" target="_blank">ソースコード <span aria-hidden="true">↗</span></a></div>
+      </footer>
+      <noscript><p class="notice">送受信にはJavaScriptが必要です。ブラウザーの設定を確認してください。</p></noscript>
+    </div>
+  </body>
+</html>

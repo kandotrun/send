@@ -1,0 +1,38 @@
+{
+  "name": "send",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build:web": "vite build --mode assets",
+    "build": "cf build",
+    "types": "wrangler types worker-configuration.d.ts --include-runtime false --strict-vars false",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "deploy:dry": "cf deploy --dry-run"
+  },
+  "overrides": {
+    "undici": "7.29.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@cloudflare/vite-plugin": "2.0.0-beta.sha-ad79608dd",
+    "@cloudflare/workers-types": "5.20260930.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.10.0",
+    "cf": "1.0.0-beta.5",
+    "miniflare": "5.20260926.1-alpha",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2",
+    "wrangler": "4.144.0"
+  }
+}

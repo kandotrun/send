@@ -3,6 +3,7 @@ dist/
 .wrangler/
 .cloudflare/
 .dev.vars*
+!.dev.vars.example
 .env*
 !.env.example
 playwright-report/
