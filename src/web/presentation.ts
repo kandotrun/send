@@ -1,11 +1,11 @@
-import { MAX_PLAIN_BYTES, type TtlSeconds } from "../shared/protocol.ts";
+import { MAX_BUFFERED_BYTES, MAX_PLAIN_BYTES, type TtlSeconds } from "../shared/protocol.ts";
 
 export function validateFiles(files: readonly { size: number }[]): string | null {
   if (files.length === 0) return "ファイルを1個選んでください。";
   if (files.length !== 1) return "一度に送れるファイルは1個です。";
   const file = files[0];
   if (!file || !Number.isSafeInteger(file.size) || file.size < 0 || file.size > MAX_PLAIN_BYTES) {
-    return "ファイルは100 MBまでです。";
+    return "ファイルは10 GBまでです。";
   }
   return null;
 }
@@ -17,7 +17,7 @@ export function resolveFiles<T extends { size: number }>(
   return { file: error ? null : (files[0] ?? null), error };
 }
 
-export function validateText(text: string, maxBytes = MAX_PLAIN_BYTES): string | null {
+export function validateText(text: string, maxBytes = MAX_BUFFERED_BYTES): string | null {
   if (text.length === 0) return "文章を入力してください。";
   if (new TextEncoder().encode(text).byteLength > maxBytes) return "文章は100 MBまでです。";
   return null;
@@ -47,8 +47,16 @@ export function formatExpiry(timestamp: number): string {
 }
 
 export function formatSize(size: number): string {
-  const unit = size >= 1_000_000 ? "MB" : size >= 1_000 ? "KB" : "bytes";
-  const value = unit === "MB" ? size / 1_000_000 : unit === "KB" ? size / 1_000 : size;
+  const unit =
+    size >= 1_000_000_000 ? "GB" : size >= 1_000_000 ? "MB" : size >= 1_000 ? "KB" : "bytes";
+  const value =
+    unit === "GB"
+      ? size / 1_000_000_000
+      : unit === "MB"
+        ? size / 1_000_000
+        : unit === "KB"
+          ? size / 1_000
+          : size;
   return `${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(value)} ${unit}`;
 }
 

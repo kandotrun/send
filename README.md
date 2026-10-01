@@ -2,10 +2,11 @@
 
 **ファイルと文章を、端末で暗号化してリンクで渡す。** アカウント登録は不要です。
 
-初期Web版です。ローカルで動作検証を行うための実装で、公開サービスとしての運用はまだ開始していません。
+初期Web版です。公開先は **https://send.2-38.com**。10GB対応の初回公開を準備しています。第三者による暗号・セキュリティ監査は未実施です。
 
 ## できること
-- ファイル1個、または文章を送信（最大100MB = 100,000,000 bytes）。
+- ファイル1個を最大10GB（10,000,000,000 bytes）、文章を最大100MBまで送信。
+- 100MB超のファイル受信はPC版Chrome/Edgeのディスクへの分割保存。Safari/Firefox/iPhone等は100MB以下の受信のみ。
 - 本文・ファイル名・内容種別を端末で暗号化。
 - 1時間・24時間・7日で期限が切れる共有リンク。
 - 共有リンクとは別の管理リンクで手動失効。
@@ -45,8 +46,10 @@ E2Eは独立したローカル状態を作成し、ブラウザから実API・D1
 ## 実装と運用
 
 - [製品・API・暗号プロトコルの仕様](docs/spec.md)
-- [セキュリティと公開前ゲート](docs/security.md)
+- [セキュリティと初期公開の条件](docs/security.md)
 - [開発・検証・運用手順](docs/agent-setup.md)
 - [AIエージェント向けルール](AGENTS.md)
 
-Cloudflare Workers + D1 + 非公開R2。操作CLIは公式`cf`を使い、build/dry-runはViteのCloudflare plugin、beta段階のlocal dev/migrationsは検証済みのWrangler互換経路を使います。リソースIDは未設定、本番アップロードは既定で無効です。txtとは鍵・権限・保存先を共有しません。
+Cloudflare Workers + D1 + 非公開R2。操作CLIは公式`cf`を使い、build/dry-runはViteのCloudflare plugin、beta段階のlocal dev/migrationsは検証済みのWrangler互換経路を使います。send専用D1/R2を設定済み。通常buildはアップロード無効のまま、明示的な `--mode live` でのみ公開を有効にします。txtとは鍵・権限・保存先を共有しません。総暗号文予約100GB・IPごと10分5件・全体UTC日100件の上限があります。
+
+フル10GBの実ブラウザー／ディスク試験は手動で `SEND_TEN_GB=1 SEND_E2E_PORT=8859 npm run test:e2e -- tests/e2e/ten-gb.spec.ts` を実行します。合成ファイル10GBの送信・受信を全量通し、native OPFSのディスク出力をSHA-256で照合します。OSの保存先ダイアログだけをnative OPFSハンドルへ置き換えるため、実ダイアログや実iPhoneの検証とは区別します。

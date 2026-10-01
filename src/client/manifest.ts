@@ -1,5 +1,6 @@
 import {
   CHUNK_BYTES,
+  MAX_BUFFERED_BYTES,
   MAX_PLAIN_BYTES,
   type Manifest,
   TTL_OPTIONS,
@@ -41,6 +42,7 @@ export function validateManifest(value: unknown, id: string): Manifest {
     !Number.isSafeInteger(item.size) ||
     (item.size as number) < 0 ||
     (item.size as number) > MAX_PLAIN_BYTES ||
+    (item.kind === "text" && (item.size as number) > MAX_BUFFERED_BYTES) ||
     item.chunkBytes !== CHUNK_BYTES ||
     item.chunkCount !== Math.max(1, Math.ceil((item.size as number) / CHUNK_BYTES)) ||
     !TTL_OPTIONS.some((ttl) => item.ttlSeconds === ttl)

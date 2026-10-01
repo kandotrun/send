@@ -19,6 +19,7 @@ import {
 import {
   CHUNK_BYTES,
   type CreateRequest,
+  MAX_BUFFERED_BYTES,
   MAX_PLAIN_BYTES,
   type TransferInput,
   type TransferRecord,
@@ -31,6 +32,25 @@ const input = (
 ): TransferInput => ({ blob, kind, name: "private-name.txt", mime: "text/plain" });
 const synthetic = (size: number): Uint8Array<ArrayBuffer> =>
   Uint8Array.from({ length: size }, (_, i) => (i * 17 + 5) % 251);
+
+// 10GB境界を検証するためだけに巨大なメモリを確保しない。
+class SizedBlob extends Blob {
+  slices: [number, number][] = [];
+  constructor(private readonly reportedSize: number) {
+    super([]);
+  }
+  override get size(): number {
+    return this.reportedSize;
+  }
+  override arrayBuffer(): Promise<ArrayBuffer> {
+    throw new Error("A whole-file allocation is forbidden");
+  }
+  override slice(start = 0, end = this.size): Blob {
+    this.slices.push([start, end]);
+    if (start !== 0 || end !== CHUNK_BYTES) throw new Error("Unexpected unbounded slice");
+    return new Blob([new Uint8Array(CHUNK_BYTES)]);
+  }
+}
 
 // モックfetchではなく、実際のTCP/HTTP経路からヘッダーと本文を検証する。
 class Loopback {
@@ -439,7 +459,7 @@ describe("send v1 real HTTP client", () => {
   });
 
   it("rejects invalid inputs before any request", async () => {
-    const tooLarge = new Blob([new Uint8Array(MAX_PLAIN_BYTES + 1)]);
+    const tooLarge = new SizedBlob(MAX_PLAIN_BYTES + 1);
     for (const [value, ttl] of [
       [input(tooLarge), 3600],
       [input(), 60],
@@ -451,12 +471,46 @@ describe("send v1 real HTTP client", () => {
     expect(loop.requests).toHaveLength(0);
   });
 
-  it("reports the 100 MB limit and allowed TTLs before any request", async () => {
-    await expect(
-      createTransfer(input(new Blob([new Uint8Array(MAX_PLAIN_BYTES + 1)])), 3600),
-    ).rejects.toThrow(/100 MB/);
+  it("reports the exact 10 GB file limit before requests or blob reads", async () => {
+    const blob = new SizedBlob(MAX_PLAIN_BYTES + 1);
+    await expect(createTransfer(input(blob, "file"), 3600)).rejects.toThrow(/10 GB/);
+    expect(blob.slices).toEqual([]);
+    expect(loop.requests).toHaveLength(0);
+  });
+
+  it.each([MAX_BUFFERED_BYTES + 1, MAX_PLAIN_BYTES + 1])(
+    "reports the unchanged 100 MB text limit for %i bytes before requests or blob reads",
+    async (size) => {
+      const blob = new SizedBlob(size);
+      await expect(createTransfer(input(blob, "text"), 3600)).rejects.toThrow(/100 MB/);
+      expect(blob.slices).toEqual([]);
+      expect(loop.requests).toHaveLength(0);
+    },
+  );
+
+  it("reports allowed TTLs before any request", async () => {
     await expect(createTransfer(input(), 60 as 3600)).rejects.toThrow(/有効期限/);
     expect(loop.requests).toHaveLength(0);
+  });
+
+  it("admits exactly 10 GB while reading only bounded sequential upload slices", async () => {
+    const blob = new SizedBlob(MAX_PLAIN_BYTES);
+    const controller = new AbortController();
+    await expect(
+      createTransfer(input(blob, "file"), 3600, {
+        signal: controller.signal,
+        onProgress: ({ stage, done }) => {
+          if (stage === "uploading" && done > 0) controller.abort();
+        },
+      }),
+    ).rejects.toThrow(/中止/);
+    expect(loop.stored?.chunkCount).toBe(Math.ceil(MAX_PLAIN_BYTES / CHUNK_BYTES));
+    expect(loop.stored?.cipherBytes).toBe(
+      MAX_PLAIN_BYTES + 28 * Math.ceil(MAX_PLAIN_BYTES / CHUNK_BYTES),
+    );
+    expect(blob.slices).toEqual([[0, CHUNK_BYTES]]);
+    expect(loop.chunks.size).toBe(1);
+    expect(loop.revoked).toBe(true);
   });
 
   it("cancels before creation without sending requests", async () => {

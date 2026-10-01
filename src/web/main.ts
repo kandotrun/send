@@ -24,6 +24,14 @@ import {
   validateFiles,
   validateText,
 } from "./presentation.ts";
+import {
+  LARGE_FILE_GUIDE,
+  needsNativeSave,
+  saveFailureCode,
+  saveFailureDetail,
+  saveLargeFile,
+  supportsNativeSave,
+} from "./save.ts";
 import "./style.css";
 
 function element<T = HTMLElement>(id: string): T {
@@ -115,7 +123,12 @@ function refreshControls(): void {
     "#created-view button, #receiver-view button, #management-view button, #invalid-view button",
   ))
     button.disabled = busy;
-  receiveButton.disabled = busy || !opened || opened.expiresAt <= Date.now() || textBlob !== null;
+  receiveButton.disabled =
+    busy ||
+    !opened ||
+    opened.expiresAt <= Date.now() ||
+    textBlob !== null ||
+    (needsNativeSave(opened.manifest) && !supportsNativeSave(window.showSaveFilePicker));
   revokeCreatedButton.disabled = busy || !created || createdRevoked;
   revokeManagedButton.disabled =
     busy ||
@@ -321,9 +334,21 @@ async function receive(): Promise<void> {
   const version = routeVersion;
   const active = startOperation(
     "受け取り、復号しています",
-    "すべての内容を確認してから保存します。",
+    needsNativeSave(transfer.manifest)
+      ? "保存先を選んでください。保存先の空き容量と権限を確認してください。"
+      : "すべての内容を確認してから保存します。",
   );
   try {
+    if (needsNativeSave(transfer.manifest)) {
+      await saveLargeFile(transfer, window.showSaveFilePicker?.bind(window), {
+        signal: active.signal,
+        onProgress: onProgress,
+        isCurrent: () => version === routeVersion,
+      });
+      if (version !== routeVersion || active.signal.aborted) return;
+      setStatus("success", "ファイルを保存しました。", "選んだ保存先を確認してください。");
+      return;
+    }
     const blob = await transfer.download({ signal: active.signal, onProgress: onProgress });
     if (version !== routeVersion || active.signal.aborted) return;
     if (transfer.manifest.kind === "text") {
@@ -350,12 +375,15 @@ async function receive(): Promise<void> {
     }
   } catch (error) {
     if (version !== routeVersion) return;
+    const saveDetail = saveFailureDetail(error);
+    const cancelled = active.signal.aborted || saveFailureCode(error) === "cancelled";
     setStatus(
-      active.signal.aborted ? "cancelled" : "error",
-      active.signal.aborted ? "受け取りを中止しました。" : "受け取れませんでした。",
-      active.signal.aborted
-        ? "もう一度ボタンを押すと、はじめから受け取れます。"
-        : failureDetail(error, "receive"),
+      cancelled ? "cancelled" : "error",
+      cancelled ? "受け取りを中止しました。" : "受け取れませんでした。",
+      saveDetail ??
+        (active.signal.aborted
+          ? "もう一度ボタンを押すと、はじめから受け取れます。"
+          : failureDetail(error, "receive")),
     );
   } finally {
     if (version === routeVersion && active.signal.aborted && status.dataset.state === "pending") {
@@ -542,12 +570,20 @@ async function route(): Promise<void> {
           `${transfer.manifest.kind === "text" ? "文章" : "ファイル"} · ${formatSize(transfer.manifest.size)}`;
         setExpiry("receive-expiry", transfer.expiresAt);
         element("receive-button-label").textContent =
-          transfer.manifest.kind === "text" ? "文章を開く" : "ファイルを保存する";
-        setStatus(
-          "success",
-          "受け取る準備ができました。",
-          "内容は、受け取りボタンを押すまでダウンロードしません。",
-        );
+          transfer.manifest.kind === "text"
+            ? "文章を開く"
+            : needsNativeSave(transfer.manifest)
+              ? "保存先を選んで受け取る"
+              : "ファイルを保存する";
+        if (needsNativeSave(transfer.manifest) && !supportsNativeSave(window.showSaveFilePicker)) {
+          setStatus("error", "このブラウザーでは受け取れません。", LARGE_FILE_GUIDE);
+        } else {
+          setStatus(
+            "success",
+            "受け取る準備ができました。",
+            "内容は、受け取りボタンを押すまでダウンロードしません。",
+          );
+        }
       } catch (error) {
         if (version === routeVersion)
           showInvalid(

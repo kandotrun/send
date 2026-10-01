@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
-    <meta name="description" content="ファイルや文章を、この端末で暗号化して送る。登録不要、100 MBまで。" />
+    <meta name="description" content="ファイルや文章を、この端末で暗号化して送る。登録不要。ファイル10 GB、文章100 MBまで。" />
     <meta name="theme-color" content="#f5f2ea" />
     <title>send. — ひとつ、送る。</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -19,7 +19,7 @@
           </svg>
           <span>send<span class="brand-dot">.</span></span>
         </a>
-        <span class="header-note">登録なし。<span>この端末で暗号化。</span></span>
+        <span class="header-note">登録なし。<span>ファイル10 GBまで。</span></span>
       </header>
 
       <main id="main-content">
@@ -55,7 +55,7 @@
                     </svg>
                     <p class="drop-title">ここにファイルを置く</p>
                     <p class="drop-subtitle">または <button id="file-pick" class="text-button" type="button">ファイルを選ぶ</button></p>
-                    <p class="fine-print">1ファイル / 100 MBまで</p>
+                    <p class="fine-print">1ファイル / 10 GBまで</p>
                     <input id="file-input" class="sr-only" type="file" aria-label="送るファイルを選ぶ" tabindex="-1" />
                   </div>
                   <div id="file-selection" class="file-selection" hidden>
@@ -66,12 +66,13 @@
                     </div>
                     <button id="file-clear" class="small-button" type="button" aria-label="選んだファイルを取り除く">取り除く</button>
                   </div>
+                  <p id="sender-browser-guide" class="notice"><strong>100 MBを超えるファイルの受け取りには、PC版ChromeまたはEdgeを使ってください。</strong>送る前に、相手のブラウザーと保存先の空き容量を確認してください。</p>
                 </div>
 
                 <div id="text-panel" class="input-panel" role="tabpanel" aria-labelledby="text-tab" hidden>
                   <label class="sr-only" for="text-input">送る文章</label>
                   <textarea id="text-input" rows="6" placeholder="届けたいことばを、ここに。" aria-describedby="text-size" spellcheck="false"></textarea>
-                  <p id="text-size" class="fine-print text-counter">文章も、この端末で暗号化します。</p>
+                  <p id="text-size" class="fine-print text-counter">文章は100 MBまで。この端末で暗号化します。</p>
                 </div>
 
                 <div class="send-options">
@@ -88,6 +89,7 @@
                 <p id="input-error" class="input-error" role="alert" hidden></p>
                 <button id="send-button" class="primary-button" type="submit"><span>共有リンクをつくる</span><span aria-hidden="true">↗</span></button>
                 <p class="form-note">内容とファイル名は、この端末で暗号化してから送信します。</p>
+                <p class="fine-print">1 GB = 1,000,000,000 bytes。送信・受け取り中はタブを開いたままお待ちください。自動再試行・途中再開はできません。送信は共有期限、または作成から24時間の早い方までに完了する必要があります。</p>
               </fieldset>
             </form>
           </section>
@@ -117,6 +119,7 @@
             <div class="received-file"><span class="file-glyph" aria-hidden="true">↓</span><div class="file-information"><h3 id="receive-name">受け取る内容</h3><p id="receive-size" class="fine-print"></p></div></div>
             <div class="expiry-receipt"><span>受け取れる期限</span><time id="receive-expiry"></time></div>
             <p class="safety-note">ウイルス検査は行っていません。信頼できる相手からのファイルだけ開いてください。</p>
+            <p id="receiver-browser-guide" class="notice"><strong>100 MBを超えるファイルの受け取りには、PC版ChromeまたはEdgeを使ってください。</strong>保存先を選び、少量ずつ復号して保存します。保存先の権限と空き容量（作業用領域を含む）を確認してください。タブを開いたままお待ちください。自動再試行・途中再開はできません。</p>
             <button id="receiver-download" class="primary-button" type="button"><span id="receive-button-label">ファイルを保存する</span><span aria-hidden="true">↓</span></button>
             <div id="received-text-panel" class="received-text-panel" hidden>
               <h3>受け取った文章</h3>
@@ -167,10 +170,11 @@
             <p>サイズ・期限・IPアドレスなどの通信メタデータは、サービス運営者や配信基盤から見えます。</p>
             <p>ウイルス検査は行っていません。信頼できる相手からのファイルだけ開いてください。</p>
             <p>サービスから配信されるJavaScriptが改ざんされた場合や、端末や拡張機能が侵害された場合まで、暗号化だけで防ぐことはできません。<strong>第三者によるセキュリティ監査は未実施</strong>です。</p>
-            <p>1件につきファイル1個または文章、100 MBまで。受け取り時は全文をメモリ上で復号するため、端末によっては大きなファイルを扱えません。</p>
+            <p>初期ベータ版です。1件につきファイル1個（10 GBまで）または文章（100 MBまで）。100 MB以下はメモリ上で復号するため、端末によっては処理できません。100 MBを超えるファイルは、PC版ChromeまたはEdgeの保存先選択機能が必要です。iPhone・Safari・Firefoxなどでは大容量ファイルを受け取れません。全体をメモリに組み立てず、少量ずつ復号して保存します。</p>
+            <p>1 GB = 1,000,000,000 bytes。有効期限は作成時から始まります。送信・受け取り中はタブを開いたままにしてください。自動再試行・途中再開はできません。受け取りが失敗した場合は、はじめから受け取り直してください。</p>
           </div>
         </details>
-        <div class="footer-line"><span class="footer-signature">send. <span class="footer-tagline">大切なものは、必要なあいだだけ。</span></span><a href="https://github.com/kandotrun/send" rel="noopener noreferrer" target="_blank">ソースコード <span aria-hidden="true">↗</span></a></div>
+        <div class="footer-line"><span class="footer-signature">send. <span class="footer-tagline">大切なものは、必要なあいだだけ。</span></span><a href="/policy.html">利用規約・プライバシー・通報</a><a href="https://github.com/kandotrun/send" rel="noopener noreferrer" target="_blank">ソースコード <span aria-hidden="true">↗</span></a></div>
       </footer>
       <noscript><p class="notice">送受信にはJavaScriptが必要です。ブラウザーの設定を確認してください。</p></noscript>
     </div>

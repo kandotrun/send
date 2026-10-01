@@ -40,6 +40,14 @@ describe("spec: Japanese transfer stationery", () => {
     expect(html).toMatch(/<option value="604800">7日<\/option>/);
   });
 
+  it("states the upload deadline as the earlier of share expiry and 24 hours after creation", () => {
+    const sender = html.split('id="sender-view"')[1]?.split('id="created-view"')[0] ?? "";
+    expect(sender).toContain(
+      "送信は共有期限、または作成から24時間の早い方までに完了する必要があります。",
+    );
+    expect(sender).not.toMatch(/15分|15\s*minutes?/i);
+  });
+
   it("provides an in-flow live progress region and a real cancel hook", () => {
     expect(html).toContain('id="status"');
     expect(html).toContain('aria-live="polite"');
@@ -152,9 +160,12 @@ describe("spec: UI input boundaries", () => {
 
   it("accepts exactly one file at the limit, including empty files", async () => {
     const { validateFiles } = await helpers();
-    expect(validateFiles([{ size: 100_000_000 }])).toBeNull();
+    expect(validateFiles([{ size: 10_000_000_000 }])).toBeNull();
     expect(validateFiles([{ size: 0 }])).toBeNull();
-    expect(validateFiles([{ size: 100_000_001 }])).toBe("ファイルは100 MBまでです。");
+    expect(validateFiles([{ size: 10_000_000_001 }])).toBe("ファイルは10 GBまでです。");
+    for (const size of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(validateFiles([{ size }])).toBe("ファイルは10 GBまでです。");
+    }
     expect(validateFiles([{ size: 1 }, { size: 1 }])).toBe("一度に送れるファイルは1個です。");
     expect(validateFiles([])).toBe("ファイルを1個選んでください。");
   });
@@ -168,7 +179,7 @@ describe("spec: UI input boundaries", () => {
       file: null,
       error: "一度に送れるファイルは1個です。",
     });
-    expect(resolveFiles([{ size: 100_000_001 }]).file).toBeNull();
+    expect(resolveFiles([{ size: 10_000_000_001 }]).file).toBeNull();
     expect(main).toContain("selectedFile = selection.file");
   });
 
@@ -178,6 +189,34 @@ describe("spec: UI input boundaries", () => {
     expect(validateText("  \n")).toBeNull();
     expect(validateText("あ", 3)).toBeNull();
     expect(validateText("あ", 2)).toBe("文章は100 MBまでです。");
+    expect(validateText("x".repeat(100_000_001))).toBe("文章は100 MBまでです。");
+  });
+
+  it("formats decimal gigabytes without disguising 10 GB as 10,000 MB", async () => {
+    const { formatSize } = await helpers();
+    expect(formatSize(10_000_000_000)).toBe("10 GB");
+    expect(formatSize(1_010_000_000)).toBe("1.01 GB");
+    expect(formatSize(100_000_000)).toBe("100 MB");
+  });
+
+  it("discloses large-file browser and storage constraints before send and receive", () => {
+    const guide = "100 MBを超えるファイルの受け取りには、PC版ChromeまたはEdgeを使ってください。";
+    const sender = html.split('id="sender-view"')[1]?.split('id="created-view"')[0] ?? "";
+    const receiver = html.split('id="receiver-view"')[1]?.split('id="management-view"')[0] ?? "";
+    expect(sender).toContain(guide);
+    expect(receiver).toContain(guide);
+    expect(html).toMatch(/id="sender-browser-guide" class="notice"/);
+    expect(html).toMatch(/id="receiver-browser-guide" class="notice"/);
+    expect(sender).toContain("10 GBまで");
+    expect(html).toContain("文章は100 MBまで");
+    expect(html).toContain("1 GB = 1,000,000,000 bytes");
+    expect(html).toContain("自動再試行・途中再開はできません");
+    expect(html).toContain("タブを開いたまま");
+    expect(html).toContain("作成時から");
+    expect(html).toContain("初期ベータ版");
+    expect(html).toContain('href="/policy.html"');
+    expect(main).toContain("saveLargeFile(");
+    expect(main).toContain("supportsNativeSave(");
   });
 
   it("rejects nonprotocol TTLs rather than silently normalizing values", async () => {

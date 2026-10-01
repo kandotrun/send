@@ -1,5 +1,6 @@
 export const VERSION = 1;
-export const MAX_PLAIN_BYTES = 100_000_000;
+export const MAX_PLAIN_BYTES = 10_000_000_000;
+export const MAX_BUFFERED_BYTES = 100_000_000;
 export const CHUNK_BYTES = 4_194_304;
 export const ENVELOPE_OVERHEAD = 28;
 export const MAX_MANIFEST_BYTES = 8_192;
@@ -73,4 +74,8 @@ export interface OpenedTransfer {
   manifest: Manifest;
   expiresAt: number;
   download: (options?: TransferOptions) => Promise<Blob>;
+  downloadTo: (
+    sink: WritableStream<Uint8Array<ArrayBuffer>>,
+    options?: TransferOptions,
+  ) => Promise<void>;
 }

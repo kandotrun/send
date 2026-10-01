@@ -15,7 +15,12 @@ import {
   parseReadLink,
   validateManifest,
 } from "../src/client/crypto";
-import { CHUNK_BYTES, MAX_PLAIN_BYTES, type Manifest } from "../src/shared/protocol";
+import {
+  CHUNK_BYTES,
+  MAX_BUFFERED_BYTES,
+  MAX_PLAIN_BYTES,
+  type Manifest,
+} from "../src/shared/protocol";
 
 const id = "AAECAwQFBgcICQoLDA0ODw";
 const key = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
@@ -35,6 +40,24 @@ const manifest = (changes: Record<string, unknown> = {}): Manifest =>
 
 // サーバーに平文や復号鍵を渡さないための暗号境界。
 describe("send v1 crypto", () => {
+  it("keeps authenticated text manifests capped at exactly 100 MB", async () => {
+    const keys = await deriveKeys(key, id);
+    const valid = manifest({
+      kind: "text",
+      size: MAX_BUFFERED_BYTES,
+      chunkCount: Math.ceil(MAX_BUFFERED_BYTES / CHUNK_BYTES),
+    });
+    expect(validateManifest(valid, id).size).toBe(MAX_BUFFERED_BYTES);
+    expect(await decryptManifest(keys, id, await encryptManifest(keys, valid))).toEqual(valid);
+    const oversized = manifest({
+      kind: "text",
+      size: MAX_BUFFERED_BYTES + 1,
+      chunkCount: Math.ceil((MAX_BUFFERED_BYTES + 1) / CHUNK_BYTES),
+    });
+    expect(() => validateManifest(oversized, id)).toThrow();
+    await expect(encryptManifest(keys, oversized)).rejects.toThrow();
+  });
+
   it("classifies authentication failure as trusted decryption failure without leaking key or metadata", async () => {
     const keys = await deriveKeys(key, id);
     const wrongKeys = await deriveKeys(generateSecrets().key, id);

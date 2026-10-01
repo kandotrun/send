@@ -23,7 +23,7 @@ export function failureDetail(error: unknown, action: FailureAction): string {
     case "decryption":
       return "復号できませんでした。共有リンク全体を送り主に確認してください。解決しない場合は、新しい共有リンクを作ってもらってください。";
     case "too-large":
-      return "送れる大きさを超えています。100 MB以下の内容を選んでください。";
+      return "送れる大きさを超えています。ファイルは10 GB以下、文章は100 MB以下にしてください。";
     case "conflict":
       return "転送の状態が変わりました。新しく送信し直してください。";
     default:

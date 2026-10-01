@@ -1,0 +1,32 @@
+html {
+  color-scheme: light dark;
+}
+body {
+  font-family: system-ui, sans-serif;
+  line-height: 1.8;
+  margin: 0;
+}
+main {
+  max-width: 48rem;
+  padding: 2rem 1.25rem 4rem;
+  margin-inline: auto;
+  overflow-wrap: anywhere;
+}
+h1 {
+  font-size: 1.8rem;
+  line-height: 1.4;
+}
+h2 {
+  margin-top: 2.2rem;
+  font-size: 1.25rem;
+}
+li {
+  margin-block: 0.6rem;
+}
+a {
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}

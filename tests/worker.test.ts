@@ -112,6 +112,7 @@ describe("send Worker with real D1 and R2", () => {
     runtime = await startWorker();
   }, 60000);
   afterEach(async () => {
+    await control("release");
     await runtime?.mf.dispose();
   }, 60000);
 
@@ -125,7 +126,7 @@ describe("send Worker with real D1 and R2", () => {
     });
     for (const path of ["/api/health", "/", "/api/unknown"]) {
       const r = await request(path);
-      expect(r.headers.get("Cache-Control")).toBe("no-store");
+      expect(r.headers.get("Cache-Control")).toBe("no-store, no-transform");
       expect(r.headers.get("X-Content-Type-Options")).toBe("nosniff");
       expect(r.headers.get("Referrer-Policy")).toBe("no-referrer");
       expect(r.headers.get("X-Frame-Options")).toBe("DENY");
@@ -490,12 +491,16 @@ describe("send Worker with real D1 and R2", () => {
       (await request(`/api/transfers/${f.payload.id}`, "DELETE", undefined, f.manage)).status,
     ).toBe(204);
     await Promise.all([control("cleanup"), control("cleanup")]);
-    expect(await reserved()).toBe(32);
+    expect(await reserved()).toBe(0);
+    const fenced = (await runtime.bucket.list({ include: ["customMetadata"] })).objects;
+    expect(fenced).toHaveLength(1);
+    expect(fenced[0]).toMatchObject({ size: 0, customMetadata: { sendLeaseFence: "1" } });
     await control("release");
     const putResult = await put;
     expect(putResult.status, await putResult.clone().text()).toBe(404);
     await Promise.all([control("cleanup"), control("cleanup")]);
-    expect((await runtime.bucket.list()).objects).toHaveLength(0);
+    expect((await runtime.bucket.list()).objects).toHaveLength(1);
+    expect((await runtime.bucket.head(fenced[0]?.key ?? "missing"))?.size).toBe(0);
     expect(await reserved()).toBe(0);
     expect((await request(`/api/transfers/${f.payload.id}`, "GET", undefined, f.read)).status).toBe(
       404,
@@ -524,16 +529,49 @@ describe("send Worker with real D1 and R2", () => {
     expect(await reserved()).toBe(0);
   });
 
-  it("spec: R2 completion failure after persistence stays inaccessible and is reclaimed safely", async () => {
+  it("spec: R2 completion failure after persistence stays inaccessible and is permanently fenced", async () => {
     const f = await create();
     await control("put-fail");
     expect((await upload(f)).status).toBe(503);
     expect((await complete(f)).status).toBe(409);
     expect((await upload(f)).status).toBe(409);
-    await request(`/api/transfers/${f.payload.id}`, "DELETE", undefined, f.manage);
+    expect(
+      (await request(`/api/transfers/${f.payload.id}`, "DELETE", undefined, f.manage)).status,
+    ).toBe(204);
     await control("cleanup");
-    expect((await runtime.bucket.list()).objects).toHaveLength(0);
-    expect(await reserved()).toBe(0);
+    const fenced = (await runtime.bucket.list({ include: ["customMetadata"] })).objects;
+    expect(fenced).toHaveLength(1);
+    expect(fenced[0]).toMatchObject({ size: 0, customMetadata: { sendLeaseFence: "1" } });
+    const key = fenced[0]?.key ?? "missing";
+    // 元のPUTの成否が不明なため、予約解放後も同じゼロバイトfenceを永久保持する。
+    const expectRetainedFence = async () => {
+      expect((await runtime.bucket.list({ include: ["customMetadata"] })).objects).toEqual(fenced);
+      expect(await runtime.bucket.head(key)).toMatchObject({
+        key,
+        etag: fenced[0]?.etag,
+        size: 0,
+        customMetadata: { sendLeaseFence: "1" },
+      });
+      const object = await runtime.bucket.get(key);
+      expect(object).not.toBeNull();
+      expect((await object?.arrayBuffer())?.byteLength).toBe(0);
+      expect(await reserved()).toBe(0);
+      expect(
+        await runtime.db
+          .prepare("SELECT reserved_bytes AS bytes FROM storage_quota WHERE singleton = 1")
+          .first<{ bytes: number }>(),
+      ).toEqual({ bytes: 0 });
+      expect((await runtime.db.prepare("SELECT * FROM chunks").all()).results).toHaveLength(0);
+      expect(
+        (await request(`/api/transfers/${f.payload.id}`, "GET", undefined, f.read)).status,
+      ).toBe(404);
+      expect(
+        (await request(`/api/transfers/${f.payload.id}/chunks/0`, "GET", undefined, f.read)).status,
+      ).toBe(404);
+    };
+    await expectRetainedFence();
+    await Promise.all([control("cleanup"), control("cleanup")]);
+    await expectRetainedFence();
   });
 
   it("spec: GC is bounded, preserves active transfers and prunes obsolete rate rows", async () => {
@@ -599,7 +637,7 @@ describe("send Worker with real D1 and R2", () => {
     expect(await response.json()).toEqual({ error: "not_found" });
   });
 
-  it("spec: an upload crossing its deadline cannot finalize or release its live lease early", async () => {
+  it("spec: an upload crossing its deadline cannot finalize and GC safely fences its live lease", async () => {
     const f = await create();
     await control("hold");
     const put = upload(f);
@@ -609,12 +647,14 @@ describe("send Worker with real D1 and R2", () => {
       .bind(Date.now() - 1, f.payload.id)
       .run();
     await control("cleanup");
-    expect(await reserved()).toBe(32);
+    expect(await reserved()).toBe(0);
     await control("release");
     expect((await put).status).toBe(404);
     await control("cleanup");
     expect(await reserved()).toBe(0);
-    expect((await runtime.bucket.list()).objects).toHaveLength(0);
+    const fenced = (await runtime.bucket.list({ include: ["customMetadata"] })).objects;
+    expect(fenced).toHaveLength(1);
+    expect(fenced[0]).toMatchObject({ size: 0, customMetadata: { sendLeaseFence: "1" } });
   });
 
   it("spec: incremental oversized JSON and invalid UTF-8 never modify persistence", async () => {
@@ -667,19 +707,17 @@ describe("send Worker with real D1 and R2", () => {
     expect(await reserved()).toBe(32);
   });
 
-  it("spec: GC deletes at most 24 real chunks per drain without prematurely releasing reservations", async () => {
-    const fixtures = [];
+  it("spec: GC deletes settled ciphertext rather than leaving unnecessary permanent fences", async () => {
     for (let n = 0; n < 13; n++) {
       const f = await create(fixture(CHUNK_BYTES + 1));
       expect((await upload(f, 0)).status).toBe(201);
       expect((await upload(f, 1)).status).toBe(201);
       await request(`/api/transfers/${f.payload.id}`, "DELETE", undefined, f.manage);
-      fixtures.push(f);
     }
     expect((await runtime.bucket.list()).objects).toHaveLength(26);
     await control("cleanup");
-    expect((await runtime.bucket.list()).objects).toHaveLength(2);
-    expect(await reserved()).toBe(fixtures[0]?.payload.cipherBytes);
+    expect((await runtime.bucket.list()).objects).toHaveLength(0);
+    expect(await reserved()).toBe(0);
     await control("cleanup");
     expect((await runtime.bucket.list()).objects).toHaveLength(0);
     expect(await reserved()).toBe(0);

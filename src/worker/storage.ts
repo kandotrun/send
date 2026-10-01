@@ -32,7 +32,7 @@ interface ChunkRow {
   transfer_id: string;
   chunk_index: number;
   object_key: string;
-  state: "writing" | "stored" | "failed";
+  state: "writing" | "stored" | "failed" | "fencing";
   bytes: number;
 }
 export async function authorized(
@@ -93,7 +93,7 @@ export async function createTransfer(
       value.chunkCount,
       now,
       expiresAt,
-      Math.min(expiresAt, now + 900_000),
+      Math.min(expiresAt, now + 86_400_000),
       value.cipherBytes,
       rate.ipKey,
       rate.dayKey,
@@ -167,8 +167,8 @@ export async function putChunk(
     await authorized(request, env, row.id, "upload");
     throw new HttpError(409, "conflict");
   }
-  // A writing lease is never expired by GC: a timeout cannot prove an R2 PUT has stopped.
-  // If an isolate dies before settling the lease, fail closed and keep its reservation.
+  // Immutable PUTs let revoked GC permanently fence this exact identity.
+  // A timeout or caller-side rejection never proves the native PUT has stopped.
   try {
     const stored = await env.CIPHERTEXT.put(key, bytes, {
       onlyIf: new Headers({ "If-None-Match": "*" }),
@@ -181,6 +181,7 @@ export async function putChunk(
     )
       .bind(key)
       .run();
+    await authorized(request, env, row.id, "upload");
     throw new HttpError(503, "storage_unavailable");
   }
   const settled = Date.now();
@@ -234,16 +235,61 @@ export async function revoke(env: Env, id: string): Promise<void> {
     .run();
 }
 
-// Bounded, retryable cleanup. Object identities stay durable until a confirmed delete.
-// Rows become tombstones, never reusable IDs; reservation release is guarded and monotonic.
+function isLeaseFence(object: R2Object | null): boolean {
+  return object?.size === 0 && object.customMetadata?.sendLeaseFence === "1";
+}
+
+async function reclaimChunk(env: Env, chunk: ChunkRow, now: number): Promise<void> {
+  // This durable, one-way claim is before any R2 I/O. Both writing and failed
+  // may have an unsettled native PUT; only stored proves a successful settlement.
+  // Writers update writing only, so concurrent GC cannot downgrade fencing.
+  // Failed cleanup attempts rotate to the back instead of starving later chunks.
+  const claim = await env.DB.prepare(`UPDATE chunks SET cleanup_at = ?,
+    state = CASE WHEN state IN ('writing', 'failed') THEN 'fencing' ELSE state END
+    WHERE object_key = ? AND state = ?
+      AND EXISTS (SELECT 1 FROM transfers WHERE id = ? AND state = 'revoked') RETURNING state`)
+    .bind(now, chunk.object_key, chunk.state, chunk.transfer_id)
+    .first<{ state: ChunkRow["state"] }>();
+  if (!claim) return;
+  chunk.state = claim.state;
+  const object = await env.CIPHERTEXT.head(chunk.object_key);
+  if (chunk.state === "fencing") {
+    if (!isLeaseFence(object)) {
+      // R2 conditional PUT is the linearization point: either the outstanding
+      // immutable writer wins and we retry, or the permanent fence wins and blocks it.
+      const fence = await env.CIPHERTEXT.put(chunk.object_key, new Uint8Array(0), {
+        onlyIf: object ? { etagMatches: object.etag } : new Headers({ "If-None-Match": "*" }),
+        customMetadata: { sendLeaseFence: "1" },
+      });
+      if (!isLeaseFence(fence)) return;
+      if (!isLeaseFence(await env.CIPHERTEXT.head(chunk.object_key))) return;
+    }
+  } else if (object?.customMetadata?.sendLeaseFence === "1") {
+    // No GC path may delete a fence, even if a legacy/failed lease references it.
+    if (!isLeaseFence(object)) return;
+  } else {
+    await env.CIPHERTEXT.delete(chunk.object_key);
+    if (await env.CIPHERTEXT.head(chunk.object_key)) return;
+  }
+  await env.DB.prepare(`DELETE FROM chunks WHERE object_key = ? AND state = ?
+    AND EXISTS (SELECT 1 FROM transfers WHERE id = ? AND state = 'revoked')`)
+    .bind(chunk.object_key, chunk.state, chunk.transfer_id)
+    .run();
+}
+
+// Bounded, retryable cleanup. Revoked writing/failed identities become permanent
+// zero-byte fences, NEVER deleted (including by bucket lifecycle); stored payloads
+// have proven PUT settlement and can be deleted instead.
+// Tombstone IDs are never reusable; reservation release is guarded and monotonic.
 export async function cleanup(env: Env, now = Date.now()): Promise<void> {
   const candidates = await env.DB.prepare(`SELECT id FROM transfers WHERE reserved_bytes > 0
     AND (state = 'revoked' OR expires_at <= ? OR (state = 'uploading' AND upload_deadline <= ?))
     ORDER BY cleanup_at, created_at, id LIMIT 20`)
     .bind(now, now)
     .all<{ id: string }>();
-  let remaining = 24;
+  let remaining = 64;
   for (const { id } of candidates.results) {
+    if (remaining === 0) break;
     const mark =
       await env.DB.prepare(`UPDATE transfers SET state = 'revoked', cleanup_at = ? WHERE id = ? AND reserved_bytes > 0
       AND (state = 'revoked' OR expires_at <= ? OR (state = 'uploading' AND upload_deadline <= ?))`)
@@ -251,20 +297,14 @@ export async function cleanup(env: Env, now = Date.now()): Promise<void> {
         .run();
     if (!mark.meta.changes) continue;
     const chunks = await env.DB.prepare(
-      "SELECT * FROM chunks WHERE transfer_id = ? AND state != 'writing' ORDER BY chunk_index LIMIT ?",
+      "SELECT * FROM chunks WHERE transfer_id = ? ORDER BY cleanup_at, chunk_index LIMIT ?",
     )
       .bind(id, remaining)
       .all<ChunkRow>();
     for (const chunk of chunks.results) {
       remaining--;
       try {
-        await env.CIPHERTEXT.delete(chunk.object_key);
-        if (await env.CIPHERTEXT.head(chunk.object_key)) continue;
-        await env.DB.prepare(
-          "DELETE FROM chunks WHERE object_key = ? AND state != 'writing' AND EXISTS (SELECT 1 FROM transfers WHERE id = ? AND state = 'revoked')",
-        )
-          .bind(chunk.object_key, id)
-          .run();
+        await reclaimChunk(env, chunk, now);
       } catch {
         // Retain the exact object identity and full reservation for a later drain.
       }

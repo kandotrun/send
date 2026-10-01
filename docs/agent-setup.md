@@ -36,14 +36,14 @@ cf build/dry-runは `cloudflare.config.ts` とViteのCloudflare pluginを使用�
 
 ## 未確定アップロードの監視・回復
 
-アップロード中のisolate停止・D1障害では、`writing` lease・暗号文・容量予約が無期限に残り得ます。通常GCはこのleaseを除外し、期限経過だけでは回収しません。期限切れ・失効後の読み取り拒否は維持されます。
+アップロード中のisolate停止・D1障害で未確定 `writing` leaseが残った場合、GCは転送を失効させ、同じimmutable object keyに永久ゼロバイトfenceを条件付きで設置してからleaseを回収します。時刻だけでは回収しません。古いIf-None-Match PUTはfenceにより拒否されます。fenceは永久保持し、一括削除・bucket-wide lifecycleで消してはいけません。
 
-公開前にsend専用DBの未確定lease件数と最古作成時刻、予約量を秘密を出さず監視する手順を整えます。元のPUTが再開できないことを確認できる停止・隔離手順、対象objectの削除readback、DB予約の整合性検証を含む回復runbookの承認・実リソース検証が必要です。未検証のDELETE/UPDATEをここから実行しないこと。leaseの時刻だけで予約解放・identity再利用をしてはいけません。
+監視は未確定lease件数・最古時刻・予約量・実R2 payload容量の集計のみを取得します。転送ID・object key・暗号manifest・リンク・秘密をログに出さないこと。GCが失敗している場合はUPLOADS_ENABLEDを無効にして予約整合性を調査します。手作業でchunksをDELETEしたりreserved_bytesを0へUPDATEしてはいけません。通常のGCにfencingと回収を任せます。
 
 ## 公開デプロイ
 
-この初期PRにはデプロイ承認はありません。`cf deploy`、リモートmigrations、D1/R2作成、DNS設定、公開アップロード有効化は実行しないでください。
+Kanが2026-10-01にPRマージ・send.2-38.com公開・10GB化を承認しました。以後の再公開でも対象account/D1/R2、レビュー、最新CIを確認します。対象外リソースは変更しません。
 
-承認後は[公開前ゲート](security.md#公開前ゲート)を満たし、send専用D1/R2とcanonical originを確認して設定を更新します。cfのresource commandは `cf cli search`・`cf schema`・`--help` で正確なread/write scopeを確認してから使います。global容量・rate・secretを明示し、`UPLOADS_ENABLED=true` は全ゲート確認後にのみ設定します。本番に `.dev.vars` をアップロードしないこと。
+[初期公開条件](security.md#初期公開の条件と残る検証)を満たし、send専用D1/R2とcanonical originを確認します。cfのresource commandは `cf cli search`・`cf schema`・`--help` で正確なread/write scopeを確認してから使います。global容量・rate・secretを明示し、`UPLOADS_ENABLED=true` は全ゲート確認後にのみ設定します。本番に `.dev.vars` をアップロードしないこと。
 
 デプロイ後はdeployment revision、配信bundleのbyte/hash、public headers、合成アカウント不要の送受信・失効・GCを実リソースでreadback検証します。テストの鍵とリンクをログやPRコメントに掲載しないこと。確認済みのテストデータだけを削除します。

@@ -4,6 +4,7 @@ import {
   type CreatedTransfer,
   type CreateRequest,
   ENVELOPE_OVERHEAD,
+  MAX_BUFFERED_BYTES,
   MAX_PLAIN_BYTES,
   type ManageLink,
   type ManageRecord,
@@ -86,8 +87,9 @@ export async function createTransfer(
   abortCheck(signal);
   if (!(input.blob instanceof Blob)) throw new Error("ファイルまたはテキストを選択してください。");
   const blob = input.blob;
-  if (blob.size > MAX_PLAIN_BYTES)
-    throw new Error("ファイルまたはテキストは100 MB以下にしてください。");
+  if (input.kind === "text" && blob.size > MAX_BUFFERED_BYTES)
+    throw new Error("テキストは100 MB以下にしてください。");
+  if (blob.size > MAX_PLAIN_BYTES) throw new Error("ファイルは10 GB以下にしてください。");
   if (!TTL_OPTIONS.includes(ttlSeconds))
     throw new Error("有効期限は1時間・1日・7日から選択してください。");
   const secrets = generateSecrets();
@@ -263,45 +265,83 @@ export async function openTransfer(
   )
     throw invalidResponse();
   abortCheck(options.signal);
+  async function receive(
+    write: (plaintext: Uint8Array<ArrayBuffer>) => Promise<void>,
+    receiveOptions: TransferOptions,
+  ): Promise<void> {
+    const { signal, onProgress } = receiveOptions;
+    let size = 0;
+    abortCheck(signal);
+    progress(onProgress, { stage: "downloading", done: 0, total: manifest.size });
+    for (let index = 0; index < manifest.chunkCount; index++) {
+      abortCheck(signal);
+      const plainBytes = Math.min(CHUNK_BYTES, manifest.size - index * CHUNK_BYTES);
+      const expectedBytes = plainBytes + ENVELOPE_OVERHEAD;
+      const response = await request(
+        origin,
+        `${pathFor(authority.id)}/chunks/${index}`,
+        "GET",
+        200,
+        authority.readToken,
+        undefined,
+        undefined,
+        signal,
+      );
+      const encrypted = await readBounded(
+        response,
+        expectedBytes,
+        "application/octet-stream",
+        signal,
+      );
+      if (encrypted.length !== expectedBytes) throw invalidResponse();
+      const plaintext = await decryptChunk(keys, authority.id, index, encrypted);
+      abortCheck(signal);
+      if (plaintext.length !== plainBytes) throw invalidResponse();
+      // 保存先のbackpressureが解消するまで、次の暗号チャンクを取得しない。
+      await write(plaintext);
+      abortCheck(signal);
+      // write後に保存先がbufferをtransferしても、認証済みの長さで集計する。
+      size += plainBytes;
+      progress(onProgress, { stage: "downloading", done: size, total: manifest.size });
+    }
+    abortCheck(signal);
+    if (size !== manifest.size) throw invalidResponse();
+  }
   return {
     manifest: { ...manifest },
     expiresAt: item.expiresAt,
     download: async (downloadOptions: TransferOptions = {}) => {
-      const { signal, onProgress } = { ...options, ...downloadOptions };
+      const receiveOptions = { ...options, ...downloadOptions };
+      abortCheck(receiveOptions.signal);
+      if (manifest.size > MAX_BUFFERED_BYTES)
+        throw new Error("100 MBを超えるファイルはストリーミング保存を使用してください。");
       const parts: Uint8Array<ArrayBuffer>[] = [];
-      let size = 0;
-      abortCheck(signal);
-      progress(onProgress, { stage: "downloading", done: 0, total: manifest.size });
-      for (let index = 0; index < manifest.chunkCount; index++) {
-        const plainBytes = Math.min(CHUNK_BYTES, manifest.size - index * CHUNK_BYTES);
-        const expectedBytes = plainBytes + ENVELOPE_OVERHEAD;
-        const response = await request(
-          origin,
-          `${pathFor(authority.id)}/chunks/${index}`,
-          "GET",
-          200,
-          authority.readToken,
-          undefined,
-          undefined,
-          signal,
-        );
-        const encrypted = await readBounded(
-          response,
-          expectedBytes,
-          "application/octet-stream",
-          signal,
-        );
-        if (encrypted.length !== expectedBytes) throw invalidResponse();
-        const plaintext = await decryptChunk(keys, authority.id, index, encrypted);
-        if (plaintext.length !== plainBytes) throw invalidResponse();
+      await receive(async (plaintext) => {
         parts.push(plaintext);
-        size += plaintext.length;
-        abortCheck(signal);
-        progress(onProgress, { stage: "downloading", done: size, total: manifest.size });
-      }
-      abortCheck(signal);
-      if (size !== manifest.size) throw invalidResponse();
+      }, receiveOptions);
+      abortCheck(receiveOptions.signal);
       return new Blob(parts, { type: manifest.mime });
+    },
+    downloadTo: async (sink, downloadOptions: TransferOptions = {}) => {
+      const receiveOptions = { ...options, ...downloadOptions };
+      let writer: WritableStreamDefaultWriter<Uint8Array<ArrayBuffer>> | undefined;
+      try {
+        writer = sink.getWriter();
+        const target = writer;
+        await receive((plaintext) => target.write(plaintext), receiveOptions);
+        abortCheck(receiveOptions.signal);
+        await target.close();
+        abortCheck(receiveOptions.signal);
+      } catch (error) {
+        const failure = receiveOptions.signal?.aborted
+          ? new Error("転送を中止しました。")
+          : safeTransferError(error);
+        // cleanupや保存先の例外で、本来の安全なエラー分類を上書きしない。
+        await writer?.abort(failure).catch(() => undefined);
+        throw failure;
+      } finally {
+        writer?.releaseLock();
+      }
     },
   };
 }

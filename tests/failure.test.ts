@@ -62,7 +62,10 @@ describe("spec: actionable Japanese failure guidance", () => {
       "decryption",
       "復号できませんでした。共有リンク全体を送り主に確認してください。解決しない場合は、新しい共有リンクを作ってもらってください。",
     ],
-    ["too-large", "送れる大きさを超えています。100 MB以下の内容を選んでください。"],
+    [
+      "too-large",
+      "送れる大きさを超えています。ファイルは10 GB以下、文章は100 MB以下にしてください。",
+    ],
     ["conflict", "転送の状態が変わりました。新しく送信し直してください。"],
   ] as const)("maps trusted %s to distinct fixed guidance", (code, copy) => {
     expect(failureDetail(new TransferError(code), "receive")).toBe(copy);

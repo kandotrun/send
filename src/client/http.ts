@@ -1,4 +1,4 @@
-import { TransferError } from "../shared/errors";
+import { TransferError, transferErrorCode } from "../shared/errors";
 import { currentOrigin } from "./links";
 
 export function abortCheck(signal?: AbortSignal): void {
@@ -80,7 +80,11 @@ export async function readBounded(
   try {
     while (true) {
       abortCheck(signal);
-      const part = await reader.read();
+      // 本文の読み取り失敗だけを通信エラーにし、形式・長さの検証とは区別する。
+      const part = await reader.read().catch(() => {
+        abortCheck(signal);
+        throw new TransferError("network");
+      });
       abortCheck(signal);
       if (part.done) break;
       length += part.value.length;
@@ -95,9 +99,10 @@ export async function readBounded(
       offset += part.length;
     }
     return bytes;
-  } catch {
+  } catch (error) {
     await reader.cancel().catch(() => undefined);
     abortCheck(signal);
+    if (transferErrorCode(error) === "network") throw error;
     throw invalidResponse();
   } finally {
     reader.releaseLock();

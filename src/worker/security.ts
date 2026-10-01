@@ -26,7 +26,7 @@ export const notFound = () => new HttpError(404, "not_found");
 
 export function secure(response: Response): Response {
   const result = new Response(response.body, response);
-  result.headers.set("Cache-Control", "no-store");
+  result.headers.set("Cache-Control", "no-store, no-transform");
   result.headers.set("X-Content-Type-Options", "nosniff");
   result.headers.set("Referrer-Policy", "no-referrer");
   result.headers.set("X-Frame-Options", "DENY");
