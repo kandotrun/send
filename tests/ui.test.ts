@@ -136,6 +136,46 @@ describe("spec: Japanese transfer stationery", () => {
     expect(html).not.toMatch(/完全に安全|絶対に|100%安全/);
   });
 
+  it("speaks with calm indigo copy and no decorative English labels", () => {
+    expect(html).toContain("<title>send. — 鍵をかけて、リンクで渡す。</title>");
+    for (const copy of [
+      "鍵をかけて、リンクで渡す。",
+      "暗号化して共有リンクをつくる",
+      "内容とファイル名は、この端末で暗号化します",
+      "復号の鍵はサーバーに送りません",
+      "期限切れ・取り消し後は受け取れません",
+      "共有リンクができました。",
+      "管理リンク（控え）",
+      "暗号化された内容が届いています。",
+      "内容は、ボタンを押すまでダウンロードしません。",
+    ])
+      expect(html).toContain(copy);
+    for (const label of [
+      "A SMALL DELIVERY",
+      "LINK DELIVERY",
+      "FOR YOU",
+      "SENDER'S COPY",
+      "UNDELIVERED",
+      "send. / 01",
+      "screen-eyebrow",
+      'class="eyebrow"',
+    ])
+      expect(html + main).not.toContain(label);
+    expect(main).not.toMatch(/A DELIVERY FOR YOU|KEEP YOUR COPY/);
+  });
+
+  it("hides large-file guidance until it applies and themes the browser chrome", () => {
+    expect(html).toMatch(/<p id="sender-browser-guide"[^>]*\shidden[\s>]/);
+    expect(html).toMatch(/<p id="receiver-browser-guide"[^>]*\shidden[\s>]/);
+    expect(html).toContain(
+      '<meta name="theme-color" content="#eef2f5" media="(prefers-color-scheme: light)" />',
+    );
+    expect(html).toContain(
+      '<meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)" />',
+    );
+    expect(main).toContain("main.dataset.view = next");
+  });
+
   it("uses only self-hosted assets and accessible responsive styling", () => {
     expect(html).toContain('lang="ja"');
     expect(html).toContain('name="viewport"');

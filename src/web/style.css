@@ -185,6 +185,9 @@ main:not([data-view="sender"]) .introduction {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+main:not([data-view="sender"]) #screen-description {
+  display: none;
+}
 .card {
   min-width: 0;
   padding: 28px;
