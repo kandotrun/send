@@ -185,8 +185,9 @@ describe("spec: Japanese transfer stationery", () => {
     expect(css).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/);
     expect(css).toContain("prefers-reduced-motion: reduce");
     expect(css).toContain(":focus-visible");
-    // 画面遷移で移す見出しのフォーカスは読み上げ用で、操作対象ではないため枠を出さない。
-    expect(css).toMatch(/\[tabindex="-1"\]:focus\s*\{\s*outline:\s*none;/);
+    // 画面遷移で移す見出しのフォーカスは読み上げ用のため枠を出さない。受信文章など操作対象は対象外。
+    expect(css).toMatch(/h2\[tabindex="-1"\]:focus\s*\{\s*outline:\s*none;/);
+    expect(css).not.toMatch(/(^|[\s,}])\[tabindex="-1"\]:focus/);
     expect(css).toContain("min-width: 0");
     expect(css).not.toContain("@import");
     expect(source("public/favicon.svg")).toContain("<svg");
@@ -359,6 +360,20 @@ describe("spec: indigo design tokens", () => {
           contrast(palette[fg] ?? "#000000", palette[bg] ?? "#000000"),
           `${mode} --${fg} on --${bg}`,
         ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("marks the selected tab with a non-text indicator of at least 3:1", () => {
+    const rule = css.match(/\.tab\[aria-selected="true"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+    const token = rule.match(/border-color:\s*var\(--([a-z-]+)\)/)?.[1] ?? "";
+    for (const [mode, palette] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const)
+      for (const bg of ["ground", "surface"])
+        expect(
+          contrast(palette[token] ?? "#000000", palette[bg] ?? "#000000"),
+          `${mode} selected tab --${token} on --${bg}`,
+        ).toBeGreaterThanOrEqual(3);
   });
 
   it("never sets text smaller than 12px", () => {

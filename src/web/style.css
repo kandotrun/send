@@ -102,7 +102,7 @@ fieldset:disabled button {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-[tabindex="-1"]:focus {
+h2[tabindex="-1"]:focus {
   outline: none;
 }
 p,
@@ -227,9 +227,9 @@ main:not([data-view="sender"]) #screen-description {
   color: var(--ink);
 }
 .tab[aria-selected="true"] {
-  color: var(--ink);
+  color: var(--accent);
   background: var(--surface);
-  border-color: var(--line);
+  border-color: var(--accent);
 }
 .input-panel {
   min-width: 0;

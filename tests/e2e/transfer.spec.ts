@@ -226,3 +226,19 @@ test.describe("dark color scheme", () => {
     await page.screenshot({ path: "test-results/send-mobile-dark.png", fullPage: true });
   });
 });
+
+// キーボードで受け取った文章へ移ったフォーカスは、視認できる輪郭を保つ。
+test("spec: keyboard focus on received text keeps a visible outline", async ({ page, context }) => {
+  const { readUrl } = await sendText(page);
+  const recipient = await context.newPage();
+  await recipient.goto(readUrl);
+  await expect(recipient.locator("#receiver-download")).toBeEnabled();
+  await recipient.locator("#receiver-download").focus();
+  await recipient.keyboard.press("Enter");
+  await expect(recipient.locator("#received-text")).toBeFocused();
+  expect(
+    await recipient
+      .locator("#received-text")
+      .evaluate((node) => getComputedStyle(node).outlineStyle),
+  ).not.toBe("none");
+});
