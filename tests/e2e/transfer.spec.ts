@@ -205,6 +205,11 @@ test("spec: each view shows one heading and only relevant large-file guidance", 
   await manage.goto(manageUrl);
   await expect(manage.locator("#management-state")).toHaveAttribute("data-state", "ready");
   expect(await introHeight(manage)).toBeLessThanOrEqual(1);
+  // 無効画面は説明文が同じ案内を表示するため、状態欄は読み上げ専用にする。
+  await manage.goto("/#r=invalid");
+  await expect(manage.locator("#invalid-view")).toBeVisible();
+  await expect(manage.locator("#status")).toContainText(/リンク|形式/);
+  expect((await manage.locator("#status").boundingBox())?.height ?? 0).toBeLessThanOrEqual(1);
 });
 
 test.describe("dark color scheme", () => {
