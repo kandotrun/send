@@ -186,6 +186,11 @@ function setMode(next: "file" | "text", focus = false): void {
   if (focus) (next === "file" ? fileTab : textTab).focus();
 }
 
+function showSenderGuide(file: File | null): void {
+  element("sender-browser-guide").hidden =
+    !file || !needsNativeSave({ kind: "file", size: file.size });
+}
+
 function acceptFiles(list: FileList | File[] | null | undefined): void {
   if (busy || view !== "sender") return;
   setMode("file");
@@ -198,6 +203,7 @@ function acceptFiles(list: FileList | File[] | null | undefined): void {
   element("selected-size").textContent = selectedFile ? formatSize(selectedFile.size) : "";
   element("file-selection").hidden = selectedFile === null;
   element("file-pick").textContent = "ファイルを選ぶ";
+  showSenderGuide(selectedFile);
 }
 
 function clearFile(): void {
@@ -207,6 +213,7 @@ function clearFile(): void {
   element("selected-name").textContent = "";
   element("selected-size").textContent = "";
   element("file-selection").hidden = true;
+  showSenderGuide(null);
   inputError(null);
   element("file-pick").focus();
 }
@@ -414,14 +421,16 @@ async function copy(value: string, label: string, input?: HTMLInputElement): Pro
 
 function renderManagement(record: ManageRecord): void {
   managementRecord = record;
-  element("management-state").textContent =
+  const [state, label] =
     record.expiresAt <= Date.now()
-      ? "期限切れ"
+      ? ["expired", "期限切れ"]
       : record.state === "ready"
-        ? "受け取り可能"
+        ? ["ready", "受け取り可能"]
         : record.state === "revoked"
-          ? "取り消し済み"
-          : "アップロード中";
+          ? ["revoked", "取り消し済み"]
+          : ["uploading", "アップロード中"];
+  element("management-state").textContent = label;
+  element("management-state").dataset.state = state;
   element("management-chunks").textContent = `${record.uploadedChunks} / ${record.chunkCount} 完了`;
   setExpiry("management-expiry", record.expiresAt);
   refreshControls();
@@ -507,6 +516,7 @@ function clearPrivateState(): void {
   element("received-text").textContent = "";
   element("receive-name").textContent = "";
   element("received-text-panel").hidden = true;
+  element("receiver-browser-guide").hidden = true;
   for (const url of objectUrls) URL.revokeObjectURL(url);
   objectUrls.clear();
 }
@@ -525,6 +535,7 @@ function reset(): void {
   element("file-selection").hidden = true;
   element("selected-name").textContent = "";
   element("selected-size").textContent = "";
+  showSenderGuide(null);
   element("text-size").textContent = "文章は100 MBまで。この端末で暗号化します。";
   window.history.replaceState(null, "", window.location.pathname);
   setMode("file");
@@ -564,6 +575,7 @@ async function route(): Promise<void> {
         element("receive-size").textContent =
           `${transfer.manifest.kind === "text" ? "文章" : "ファイル"} · ${formatSize(transfer.manifest.size)}`;
         setExpiry("receive-expiry", transfer.expiresAt);
+        element("receiver-browser-guide").hidden = !needsNativeSave(transfer.manifest);
         element("receive-button-label").textContent =
           transfer.manifest.kind === "text"
             ? "文章を開く"

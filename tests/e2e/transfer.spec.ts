@@ -79,6 +79,7 @@ test("spec: management revoke denies a fresh receiver without giving management 
   await manage.locator("#revoke-button").click();
   await expect(manage.locator("#status")).toHaveAttribute("data-state", "success");
   await expect(manage.locator("#status")).toContainText("リンクを取り消しました。");
+  await expect(manage.locator("#management-state")).toHaveAttribute("data-state", "revoked");
   const recipient = await context.newPage();
   await recipient.goto(readUrl);
   await expect(recipient.locator("#status")).toContainText(/期限|失効|受け取れ|見つか/);
@@ -181,4 +182,42 @@ test("spec: a valid-shaped wrong key gives decryption guidance without a plainte
   await expect(recipient.locator("#status-detail")).not.toContainText(/期限|不完全/);
   await expect(recipient.locator("#received-text")).not.toBeVisible();
   await expect(recipient.locator("#receiver-download")).not.toBeVisible();
+});
+
+// 導入見出しは送信画面だけ。大容量案内は該当時だけ表示する。
+test("spec: each view shows one heading and only relevant large-file guidance", async ({
+  page,
+  context,
+}) => {
+  const introHeight = async (target: import("@playwright/test").Page) =>
+    (await target.locator(".introduction").boundingBox())?.height ?? 0;
+  await page.goto("/");
+  expect(await introHeight(page)).toBeGreaterThan(40);
+  await expect(page.locator("#sender-browser-guide")).toBeHidden();
+  const { readUrl, manageUrl } = await sendText(page);
+  expect(await introHeight(page)).toBeLessThanOrEqual(1);
+  const recipient = await context.newPage();
+  await recipient.goto(readUrl);
+  await expect(recipient.locator("#receiver-download")).toBeEnabled();
+  await expect(recipient.locator("#receiver-browser-guide")).toBeHidden();
+  expect(await introHeight(recipient)).toBeLessThanOrEqual(1);
+  const manage = await context.newPage();
+  await manage.goto(manageUrl);
+  await expect(manage.locator("#management-state")).toHaveAttribute("data-state", "ready");
+  expect(await introHeight(manage)).toBeLessThanOrEqual(1);
+});
+
+test.describe("dark color scheme", () => {
+  test.use({ colorScheme: "dark", viewport: { width: 390, height: 844 } });
+
+  test("spec: dark mode repaints the page without horizontal overflow", async ({ page }) => {
+    await page.goto("/");
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+      "rgb(15, 22, 32)",
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: "test-results/send-mobile-dark.png", fullPage: true });
+  });
 });
