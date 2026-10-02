@@ -1,10 +1,27 @@
-html {
+:root {
   color-scheme: light dark;
+  --ground: #eef2f5;
+  --ink: #132230;
+  --line: #d5dde5;
+  --accent: #1f4e79;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0f1620;
+    --ink: #e6ecf2;
+    --line: #2a3644;
+    --accent: #8db3de;
+  }
 }
 body {
-  font-family: system-ui, sans-serif;
-  line-height: 1.8;
   margin: 0;
+  color: var(--ink);
+  background: var(--ground);
+  font-family:
+    "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP",
+    system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.85;
 }
 main {
   max-width: 48rem;
@@ -13,20 +30,24 @@ main {
   overflow-wrap: anywhere;
 }
 h1 {
+  margin-top: 1.5rem;
   font-size: 1.8rem;
   line-height: 1.4;
 }
 h2 {
   margin-top: 2.2rem;
-  font-size: 1.25rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
+  font-size: 1.2rem;
 }
 li {
   margin-block: 0.6rem;
 }
 a {
-  color: inherit;
+  color: var(--accent);
+  text-underline-offset: 4px;
 }
 :focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
