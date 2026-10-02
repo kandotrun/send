@@ -136,6 +136,46 @@ describe("spec: Japanese transfer stationery", () => {
     expect(html).not.toMatch(/完全に安全|絶対に|100%安全/);
   });
 
+  it("speaks with calm indigo copy and no decorative English labels", () => {
+    expect(html).toContain("<title>send. — 鍵をかけて、リンクで渡す。</title>");
+    for (const copy of [
+      "鍵をかけて、リンクで渡す。",
+      "暗号化して共有リンクをつくる",
+      "内容とファイル名は、この端末で暗号化します",
+      "復号の鍵はサーバーに送りません",
+      "期限切れ・取り消し後は受け取れません",
+      "共有リンクができました。",
+      "管理リンク（控え）",
+      "暗号化された内容が届いています。",
+      "内容は、ボタンを押すまでダウンロードしません。",
+    ])
+      expect(html).toContain(copy);
+    for (const label of [
+      "A SMALL DELIVERY",
+      "LINK DELIVERY",
+      "FOR YOU",
+      "SENDER'S COPY",
+      "UNDELIVERED",
+      "send. / 01",
+      "screen-eyebrow",
+      'class="eyebrow"',
+    ])
+      expect(html + main).not.toContain(label);
+    expect(main).not.toMatch(/A DELIVERY FOR YOU|KEEP YOUR COPY/);
+  });
+
+  it("hides large-file guidance until it applies and themes the browser chrome", () => {
+    expect(html).toMatch(/<p id="sender-browser-guide"[^>]*\shidden[\s>]/);
+    expect(html).toMatch(/<p id="receiver-browser-guide"[^>]*\shidden[\s>]/);
+    expect(html).toContain(
+      '<meta name="theme-color" content="#eef2f5" media="(prefers-color-scheme: light)" />',
+    );
+    expect(html).toContain(
+      '<meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)" />',
+    );
+    expect(main).toContain("main.dataset.view = next");
+  });
+
   it("uses only self-hosted assets and accessible responsive styling", () => {
     expect(html).toContain('lang="ja"');
     expect(html).toContain('name="viewport"');
@@ -145,6 +185,9 @@ describe("spec: Japanese transfer stationery", () => {
     expect(css).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/);
     expect(css).toContain("prefers-reduced-motion: reduce");
     expect(css).toContain(":focus-visible");
+    // 画面遷移で移す見出しのフォーカスは読み上げ用のため枠を出さない。受信文章など操作対象は対象外。
+    expect(css).toMatch(/h2\[tabindex="-1"\]:focus\s*\{\s*outline:\s*none;/);
+    expect(css).not.toMatch(/(^|[\s,}])\[tabindex="-1"\]:focus/);
     expect(css).toContain("min-width: 0");
     expect(css).not.toContain("@import");
     expect(source("public/favicon.svg")).toContain("<svg");
@@ -243,5 +286,99 @@ describe("spec: UI input boundaries", () => {
     expect(safeDownloadName("../../report\u0000.txt")).toBe(".._.._report_.txt");
     expect(safeDownloadName("")).toBe("download");
     expect(safeDownloadName("<img onerror=alert(1)>.txt")).toBe("<img onerror=alert(1)>.txt");
+  });
+});
+
+// 配色はトークンに集約し、両モードで本文コントラストAAを満たす。
+describe("spec: indigo design tokens", () => {
+  const names = [
+    "ground",
+    "surface",
+    "surface-muted",
+    "ink",
+    "muted",
+    "line",
+    "line-strong",
+    "accent",
+    "accent-fill",
+    "accent-fill-hover",
+    "on-accent",
+    "accent-soft",
+    "accent-ink",
+    "caution-bg",
+    "caution-ink",
+    "danger",
+    "danger-bg",
+    "success",
+  ];
+  const block = (pattern: RegExp) => css.match(pattern)?.[1] ?? "";
+  const read = (source: string) =>
+    Object.fromEntries(
+      [...source.matchAll(/--([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)].map((m) => [m[1], m[2]]),
+    ) as Record<string, string>;
+  const light = read(block(/:root\s*\{([\s\S]*?)\}/));
+  const dark = read(block(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\}/));
+  const luminance = (hex: string) => {
+    const [r = 0, g = 0, b = 0] = [1, 3, 5].map((index) => {
+      const channel = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [high = 0, low = 0] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (high + 0.05) / (low + 0.05);
+  };
+  const pairs: [string, string][] = [
+    ...["ink", "muted", "accent"].flatMap((fg) =>
+      ["ground", "surface", "surface-muted"].map((bg): [string, string] => [fg, bg]),
+    ),
+    ["on-accent", "accent-fill"],
+    ["on-accent", "accent-fill-hover"],
+    ["accent-ink", "accent-soft"],
+    ["caution-ink", "caution-bg"],
+    ["danger", "surface"],
+    ["danger", "danger-bg"],
+    ["success", "surface"],
+  ];
+
+  it("defines every token for light and dark color schemes", () => {
+    expect(css).toContain("color-scheme: light dark");
+    for (const name of names) {
+      expect(light[name], `light --${name}`).toMatch(/^#/);
+      expect(dark[name], `dark --${name}`).toMatch(/^#/);
+    }
+  });
+
+  it("keeps text at WCAG AA contrast in both schemes", () => {
+    for (const [mode, palette] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const)
+      for (const [fg, bg] of pairs)
+        expect(
+          contrast(palette[fg] ?? "#000000", palette[bg] ?? "#000000"),
+          `${mode} --${fg} on --${bg}`,
+        ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("marks the selected tab with a non-text indicator of at least 3:1", () => {
+    const rule = css.match(/\.tab\[aria-selected="true"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+    const token = rule.match(/border-color:\s*var\(--([a-z-]+)\)/)?.[1] ?? "";
+    for (const [mode, palette] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const)
+      for (const bg of ["ground", "surface"])
+        expect(
+          contrast(palette[token] ?? "#000000", palette[bg] ?? "#000000"),
+          `${mode} selected tab --${token} on --${bg}`,
+        ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("never sets text smaller than 12px", () => {
+    const sizes = [...css.matchAll(/font-size:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(sizes.filter((size) => size < 12)).toEqual([]);
   });
 });

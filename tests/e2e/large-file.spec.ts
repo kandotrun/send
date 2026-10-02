@@ -43,6 +43,7 @@ test.describe("spec: 101 MB native disk receive (controlled picker stub)", () =>
       await page.goto("/");
       await expect(page.locator("#sender-browser-guide")).toContainText(guide);
       await page.locator("#file-input").setInputFiles(path);
+      await expect(page.locator("#sender-browser-guide")).toBeVisible();
       await expect(page.locator("#selected-size")).toHaveText("101 MB");
       await page.locator("#send-button").click();
       await expect(page.locator("#created-view")).toBeVisible({ timeout: 120_000 });
@@ -63,6 +64,7 @@ test.describe("spec: 101 MB native disk receive (controlled picker stub)", () =>
     });
     await page.goto(readUrl);
     await expect(page.locator("#receiver-browser-guide")).toContainText(guide);
+    await expect(page.locator("#receiver-browser-guide")).toBeVisible();
     await expect(page.locator("#status-detail")).toHaveText(guide);
     await expect(page.locator("#receiver-download")).toBeDisabled();
     expect(reads).toEqual([]);
