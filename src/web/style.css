@@ -71,6 +71,8 @@ body {
   background: var(--ground);
   font-size: 15px;
   line-height: 1.75;
+  /* 日本語を文節で折り返し、行頭に1文字だけ残る折り返しを避ける（対応ブラウザーのみ）。 */
+  word-break: auto-phrase;
 }
 a {
   color: var(--accent);
@@ -99,6 +101,9 @@ fieldset:disabled button {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+[tabindex="-1"]:focus {
+  outline: none;
 }
 p,
 h1,
@@ -929,7 +934,7 @@ progress::-moz-progress-bar {
     margin-bottom: 20px;
   }
   h1 {
-    font-size: 28px;
+    font-size: clamp(20px, 6.6vw, 28px);
   }
   .card {
     padding: 20px 16px;

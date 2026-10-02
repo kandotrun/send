@@ -185,6 +185,8 @@ describe("spec: Japanese transfer stationery", () => {
     expect(css).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/);
     expect(css).toContain("prefers-reduced-motion: reduce");
     expect(css).toContain(":focus-visible");
+    // 画面遷移で移す見出しのフォーカスは読み上げ用で、操作対象ではないため枠を出さない。
+    expect(css).toMatch(/\[tabindex="-1"\]:focus\s*\{\s*outline:\s*none;/);
     expect(css).toContain("min-width: 0");
     expect(css).not.toContain("@import");
     expect(source("public/favicon.svg")).toContain("<svg");
