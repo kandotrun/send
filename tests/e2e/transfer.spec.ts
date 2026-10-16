@@ -288,6 +288,21 @@ test("spec: a long file name keeps a readable width on mobile", async ({ page })
   expect(layout.clearTop).toBeGreaterThanOrEqual(layout.nameBottom);
 });
 
+// 強制カラーでは背景のグラデーションが外れるため、見出しの文字を透明のまま残さない。
+test.describe("forced colors", () => {
+  test.use({ forcedColors: "active" });
+
+  test("spec: the hero heading keeps a visible text fill in forced colors", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("#send-button")).toBeVisible();
+    expect(
+      await page
+        .locator("#screen-title")
+        .evaluate((node) => getComputedStyle(node).webkitTextFillColor),
+    ).not.toBe("rgba(0, 0, 0, 0)");
+  });
+});
+
 test.describe("reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 

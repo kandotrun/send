@@ -545,6 +545,9 @@ describe("spec: giga-site glossy surfaces", () => {
     expect(animation?.[2]).toMatch(/\b(forwards|both)\b/);
     expect(rules("#screen-title").join("\n")).toMatch(/color:\s*var\(--ink\)/);
     expect(css).toMatch(/@keyframes hero-shimmer/);
+    // 強制カラーでは背景のグラデーションが外れるため、透明にした文字の塗りを戻す。
+    const forced = css.match(/@media \(forced-colors: active\)\s*\{([\s\S]*?\})\s*\}/)?.[1] ?? "";
+    expect(forced).toMatch(/#screen-title\s*\{[^}]*-webkit-text-fill-color:\s*CanvasText/);
   });
 
   it("draws the dropzone as a dashed well with a glossy icon tile", () => {

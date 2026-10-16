@@ -1510,6 +1510,9 @@ progress::-moz-progress-bar {
 }
 
 @media (forced-colors: active) {
+  #screen-title {
+    -webkit-text-fill-color: CanvasText;
+  }
   .tab[aria-selected="true"] {
     forced-color-adjust: none;
     color: SelectedItemText;
