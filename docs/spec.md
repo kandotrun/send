@@ -29,7 +29,7 @@ D1/R2はsend専用。R2公開アクセス禁止。AES鍵・生のcapabilityはDB
 未確定writing leaseは時刻だけで回収しない。失効後、同じimmutable object keyに条件付きで永久ゼロバイトfenceを置き、古いIf-None-Match PUTの復活を防止してからleaseを回収する。通常のciphertextは削除し、fenceとID tombstoneは保持する。fenceを消すbucket-wide lifecycleや手作業の一括削除は禁止。物理回収失敗は予約を保持して後続GCで再試行する。
 
 ## UI
-日本語。静かなエディトリアル調、紙・封筒を思わせる余白と細線、温かい白と墨色、朱色のアクセント。広告/分析/外部fontsなし。ファイル選択と本当に動くdrag&drop、文章タブ、期限select、進行とキャンセル、完了後閲覧リンクと管理リンクを別々にコピー。履歴に復号鍵を自動保存しない。復号失敗/expired/disabled/networkは具体的な案内。管理リンクは本人保管、紛失時復旧不可。スクリーンリーダーlabel、keyboard、live status、mobile、reduced-motionに対応。
+日本語。ギガサイト便に揃えたShadcnの構造×Bootstrap 2のやわらかい光沢（`docs/plans/2026-10-16-giga-style.md`）、白地と墨色、txtの青のアクセント。広告/分析/外部fontsなし。ファイル選択と本当に動くdrag&drop、文章タブ、期限select、進行とキャンセル、完了後閲覧リンクと管理リンクを別々にコピー。履歴に復号鍵を自動保存しない。復号失敗/expired/disabled/networkは具体的な案内。管理リンクは本人保管、紛失時復旧不可。スクリーンリーダーlabel、keyboard、live status、mobile、reduced-motionに対応。
 
 ## 公開前の限界
 リンク所持者は転送可能。サービス運営や依存配信経路による悪意あるJS差し替え・感染端末・拡張機能はWeb E2EE単体では防げない。サイズ/期限/IP等メタデータは見える。ウイルス検査なし。独立した第三者の暗号/セキュリティ監査は未実施。初期版として公開し、ブラウザー対応制約と限界をUI・/policy.htmlで明示する。実iPhoneの大容量受信は未対応。通報先は運営の公開連絡先を利用し、転送IDのみで失効処理できる。鍵・共有リンク全体を通報で集めない。

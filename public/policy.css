@@ -1,16 +1,16 @@
 :root {
   color-scheme: light dark;
-  --ground: #eef2f5;
-  --ink: #132230;
-  --line: #d5dde5;
-  --accent: #1f4e79;
+  --ground: #f5f7fc;
+  --ink: #0b0d16;
+  --line: #e5e8f0;
+  --accent: #0068d1;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #0f1620;
-    --ink: #e6ecf2;
-    --line: #2a3644;
-    --accent: #8db3de;
+    --ground: #0b0c10;
+    --ink: #f2f3f6;
+    --line: #2a2d35;
+    --accent: #4c9aff;
   }
 }
 body {

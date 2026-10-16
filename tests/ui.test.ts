@@ -168,10 +168,10 @@ describe("spec: Japanese transfer stationery", () => {
     expect(html).toMatch(/<p id="sender-browser-guide"[^>]*\shidden[\s>]/);
     expect(html).toMatch(/<p id="receiver-browser-guide"[^>]*\shidden[\s>]/);
     expect(html).toContain(
-      '<meta name="theme-color" content="#eef2f5" media="(prefers-color-scheme: light)" />',
+      '<meta name="theme-color" content="#f5f7fc" media="(prefers-color-scheme: light)" />',
     );
     expect(html).toContain(
-      '<meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)" />',
+      '<meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)" />',
     );
     expect(main).toContain("main.dataset.view = next");
   });
@@ -290,7 +290,7 @@ describe("spec: UI input boundaries", () => {
 });
 
 // 配色はトークンに集約し、両モードで本文コントラストAAを満たす。
-describe("spec: indigo design tokens", () => {
+describe("spec: blue design tokens", () => {
   const names = [
     "ground",
     "surface",
@@ -380,5 +380,187 @@ describe("spec: indigo design tokens", () => {
     const sizes = [...css.matchAll(/font-size:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
     expect(sizes.length).toBeGreaterThan(0);
     expect(sizes.filter((size) => size < 12)).toEqual([]);
+  });
+
+  // 光沢は塗りの上に白と黒を重ねるため、最も明るい点と暗い点の両方で文字AAを確かめる。
+  it("keeps button text AA at the lightest and darkest point of the gloss", () => {
+    const lightBlock = block(/:root\s*\{([\s\S]*?)\}/);
+    const darkBlock = block(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\}/);
+    const raw = (source: string, name: string) =>
+      source.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1] ?? "";
+    // 最も強い白・黒の重なりを採る。表記が変わって読めなければ NaN で失敗させる。
+    const strongest = (gradient: string, rgb: string) =>
+      Math.max(
+        ...[...gradient.matchAll(new RegExp(`rgb\\(${rgb} \\/ (\\d+)%\\)`, "g"))].map((m) =>
+          Number(m[1]),
+        ),
+      ) / 100;
+    const alphas = (gradient: string) => ({
+      white: strongest(gradient, "255 255 255"),
+      black: strongest(gradient, "0 0 0"),
+    });
+    const blend = (hex: string, overlay: number, alpha: number) =>
+      `#${[1, 3, 5]
+        .map((index) => {
+          const channel = Number.parseInt(hex.slice(index, index + 2), 16);
+          return Math.round(channel * (1 - alpha) + overlay * alpha)
+            .toString(16)
+            .padStart(2, "0");
+        })
+        .join("")}`;
+    for (const [mode, palette, source] of [
+      ["light", light, lightBlock],
+      ["dark", dark, darkBlock],
+    ] as const)
+      for (const [fill, gloss] of [
+        ["accent-fill", "gloss"],
+        ["accent-fill-hover", "gloss-hover"],
+        ["accent-fill-hover", "gloss-active"],
+      ] as const) {
+        const { white, black } = alphas(raw(source, gloss) || raw(lightBlock, gloss));
+        expect(white, `${mode} --${gloss} top highlight`).toBeGreaterThan(0);
+        expect(black, `${mode} --${gloss} bottom shade`).toBeGreaterThan(0);
+        const base = palette[fill] ?? "#000000";
+        const text = palette["on-accent"] ?? "#000000";
+        expect(
+          contrast(text, blend(base, 255, white)),
+          `${mode} --${fill} gloss top`,
+        ).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrast(text, blend(base, 0, black)),
+          `${mode} --${fill} gloss bottom`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+  });
+
+  it("keeps every hero gradient stop at least 3:1 as large text", () => {
+    for (const [mode, palette, pattern] of [
+      ["light", light, /:root\s*\{([\s\S]*?)\}/],
+      ["dark", dark, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\}/],
+    ] as const) {
+      const stops = block(pattern).match(/--hero-ink-stops:\s*([^;]+);/)?.[1] ?? "";
+      const segments = stops.split(",").map((segment) => segment.trim());
+      expect(segments.length, `${mode} hero stops`).toBeGreaterThanOrEqual(6);
+      // 6桁hex以外の停止点は検査をすり抜けるため、書式そのものを固定する。
+      for (const segment of segments)
+        expect(segment, `${mode} hero stop format`).toMatch(/^#[0-9a-fA-F]{6}\s+\d+%$/);
+      const colors = segments.map((segment) => segment.split(/\s+/)[0] ?? "");
+      for (const color of colors)
+        for (const bg of ["ground", "hero-top", "surface"])
+          expect(
+            contrast(color, palette[bg] ?? "#000000"),
+            `${mode} hero stop ${color} on --${bg}`,
+          ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("draws the focus ring as a non-text indicator of at least 3:1", () => {
+    const rule = css.match(/(^|\})\s*:focus-visible\s*\{([^}]*)\}/)?.[2] ?? "";
+    const token = rule.match(/outline:\s*2px solid var\(--([a-z-]+)\)/)?.[1] ?? "";
+    expect(token).not.toBe("");
+    for (const [mode, palette] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const)
+      for (const bg of ["ground", "surface", "surface-muted"])
+        expect(
+          contrast(palette[token] ?? "#000000", palette[bg] ?? "#000000"),
+          `${mode} focus --${token} on --${bg}`,
+        ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ギガサイト便の構造と質感（光沢・ベベル・点線ドロップ）を、CSPの範囲で再現する。
+describe("spec: giga-site glossy surfaces", () => {
+  const all = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selectors: (m[1] ?? "").split(",").map((part) => part.trim()),
+    body: m[2] ?? "",
+  }));
+  const rules = (selector: string) =>
+    all.filter((rule) => rule.selectors.includes(selector)).map((rule) => rule.body);
+  const px = (body: string, property: string) =>
+    Number(body.match(new RegExp(`(^|[;{\\s])${property}:\\s*([\\d.]+)px`))?.[2] ?? Number.NaN);
+
+  it("paints glossy fills as color plus gloss layers, never the background shorthand", () => {
+    for (const [selector, gloss] of [
+      [".primary-button", "--gloss"],
+      [".copy-button.is-primary", "--gloss"],
+      [".drop-tile", "--gloss-tile"],
+      [".logo-tile", "--gloss"],
+      [".heading-icon", "--gloss-tile"],
+    ] as const) {
+      const body = rules(selector).join("\n");
+      expect(body, selector).toMatch(/background-color:\s*var\(--accent-fill\)/);
+      expect(body, selector).toContain(`background-image: var(${gloss})`);
+      // 状態違い（:hover や @media 内の上書き）でも、ショートハンドは光沢の層を消してしまう。
+      for (const rule of all.filter((candidate) =>
+        candidate.selectors.some(
+          (part) =>
+            part === selector ||
+            (/^[:.[]/.test(part.slice(selector.length)) && part.startsWith(selector)),
+        ),
+      ))
+        expect(rule.body, rule.selectors.join(", ")).not.toMatch(/(^|[;{\s])background\s*:/);
+    }
+    for (const [state, gloss] of [
+      [":hover:not(:disabled)", "--gloss-hover"],
+      [":active:not(:disabled)", "--gloss-active"],
+    ] as const)
+      for (const selector of [".primary-button", ".copy-button.is-primary"]) {
+        const body = rules(`${selector}${state}`).join("\n");
+        expect(body, `${selector}${state}`).toMatch(
+          /background-color:\s*var\(--accent-fill-hover\)/,
+        );
+        expect(body, `${selector}${state}`).toContain(`background-image: var(${gloss})`);
+      }
+  });
+
+  it("frames the page with an announcement band, a translucent sticky header and a logo tile", () => {
+    const announce = html.indexOf('<aside class="announce" aria-label="お知らせ">');
+    expect(announce).toBeGreaterThan(-1);
+    expect(announce).toBeLessThan(html.indexOf('<header class="site-header"'));
+    const header = html.split('<header class="site-header"')[1]?.split("</header>")[0] ?? "";
+    expect(header).toMatch(/class="logo-tile" aria-hidden="true"/);
+    expect(header).toContain('href="https://github.com/kandotrun/send"');
+    const sticky = rules(".site-header").join("\n");
+    expect(sticky).toMatch(/position:\s*sticky/);
+    expect(sticky).toMatch(/backdrop-filter:\s*blur\(/);
+    // 固定ヘッダーの下にフォーカス先が隠れないよう、スクロール位置に余白を取る（WCAG 2.4.11）。
+    const padding = px(rules("html").join("\n"), "scroll-padding-top");
+    expect(padding).toBeGreaterThanOrEqual(px(rules(".header-inner").join("\n"), "min-height") + 8);
+  });
+
+  it("shimmers the hero heading itself so view titles can keep using textContent", () => {
+    const supports =
+      css.match(/@supports[^{]*background-clip:\s*text[^{]*\{([\s\S]*?\})\s*\}/)?.[1] ?? "";
+    expect(supports).toMatch(/#screen-title\s*\{/);
+    expect(supports).toMatch(/background-clip:\s*text/);
+    expect(supports).toMatch(/-webkit-text-fill-color:\s*transparent/);
+    expect(supports).toMatch(/var\(--hero-ink-stops\)/);
+    // 自動で動く表示は5秒以内に止める（WCAG 2.2.2）。
+    const animation = supports.match(/animation:\s*hero-shimmer\s+([\d.]+)s([^;]*);/);
+    expect(animation).not.toBeNull();
+    expect(Number(animation?.[1])).toBeLessThanOrEqual(5);
+    expect(animation?.[2]).not.toMatch(/infinite/);
+    expect(animation?.[2]).toMatch(/\b(forwards|both)\b/);
+    expect(rules("#screen-title").join("\n")).toMatch(/color:\s*var\(--ink\)/);
+    expect(css).toMatch(/@keyframes hero-shimmer/);
+    // 強制カラーでは背景のグラデーションが外れるため、透明にした文字の塗りを戻す。
+    const forced = css.match(/@media \(forced-colors: active\)\s*\{([\s\S]*?\})\s*\}/)?.[1] ?? "";
+    expect(forced).toMatch(/#screen-title\s*\{[^}]*-webkit-text-fill-color:\s*CanvasText/);
+  });
+
+  it("draws the dropzone as a dashed well with a glossy icon tile", () => {
+    const zone = html.split('<div id="dropzone"')[1]?.split('id="file-selection"')[0] ?? "";
+    expect(zone).toMatch(/<span class="drop-tile" aria-hidden="true"><svg/);
+    expect(rules(".dropzone").join("\n")).toMatch(/border:\s*2px dashed var\(--drop-dash\)/);
+    const dragging = rules(".dropzone.is-dragging").join("\n");
+    expect(dragging).toMatch(/border-color:\s*var\(--brand\)/);
+    // 強制カラーでも分かるよう、色だけでなく線種も変える。
+    expect(dragging).toMatch(/border-style:\s*solid/);
+  });
+
+  it("uses no CSS url() that the img-src 'self' policy would block", () => {
+    expect(css).not.toMatch(/url\(/);
   });
 });
