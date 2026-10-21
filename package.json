@@ -32,7 +32,7 @@
     "cf": "1.0.0-beta.5",
     "miniflare": "5.20260926.1-alpha",
     "typescript": "6.0.3",
-    "vite": "8.3.1",
+    "vite": "8.3.4",
     "vitest": "5.0.2",
     "wrangler": "4.144.0"
   }
